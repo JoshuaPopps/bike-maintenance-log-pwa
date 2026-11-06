@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bike Maintenance Log</title>
+<meta name="description" content="A maintenance logbook for motorcycles. Track oil, tires, primary fluid, and every other service by miles and months — and see what's due before it bites you. Works offline, data stays on your device.">
+<meta name="theme-color" content="#1c1a17">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <h1>🔧 Bike Maintenance Log</h1>
+  <p class="tagline">What's due, what's overdue, and everything you've already done — in the book.</p>
+</header>
+
+<main>
+  <!-- DUE -->
+  <section id="view-due" class="view active">
+    <label>Bike
+      <select id="due-bike"></select>
+    </label>
+    <div id="due-list"></div>
+
+    <h2>Log a service</h2>
+    <form id="log-form" class="card">
+      <div class="grid">
+        <label>Bike<select id="log-bike" required></select></label>
+        <label>Task<select id="log-task" required></select></label>
+        <label>Date<input type="date" id="log-date" required></label>
+        <label>Odometer (mi)<input type="number" id="log-odometer" inputmode="numeric" min="0" step="1"></label>
+        <label>Cost ($)<input type="number" id="log-cost" inputmode="decimal" min="0" step="0.01"></label>
+      </div>
+      <label>Notes<textarea id="log-notes" rows="2" placeholder="e.g. 20W-50, new filter"></textarea></label>
+      <button type="submit" class="primary">Log service</button>
+    </form>
+  </section>
+
+  <!-- BIKES & TASKS -->
+  <section id="view-bikes" class="view">
+    <h2>Bikes &amp; tasks</h2>
+    <div id="bikes-list"></div>
+
+    <h3>Add a bike</h3>
+    <form id="bike-form" class="card">
+      <div class="grid">
+        <label>Name<input type="text" id="bike-name" required placeholder="e.g. Example 1995 Softail"></label>
+        <label>Year<input type="text" id="bike-year" inputmode="numeric" placeholder="1995"></label>
+        <label>Make<input type="text" id="bike-make" placeholder="Harley-Davidson"></label>
+        <label>Model<input type="text" id="bike-model" placeholder="Fat Boy"></label>
+        <label>Odometer (mi)<input type="number" id="bike-odometer" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <label>Notes<textarea id="bike-notes" rows="2"></textarea></label>
+      <button type="submit" class="primary">Add bike</button>
+    </form>
+
+    <h3>Update odometer</h3>
+    <form id="odo-form" class="card">
+      <div class="grid">
+        <label>Bike<select id="odo-bike"></select></label>
+        <label>Reading (mi)<input type="number" id="odo-miles" required inputmode="numeric" min="0" step="1"></label>
+        <label>Date<input type="date" id="odo-date"></label>
+      </div>
+      <button type="submit" class="primary">Save reading</button>
+    </form>
+
+    <h3>Add a task</h3>
+    <p class="muted">Intervals come from <b>your</b> manual, not from this app — no intervals are pre-filled, because the right number depends on the bike and the manual. Tap a common name to fill it in, then set the interval yourself.</p>
+    <form id="task-form" class="card">
+      <div class="grid">
+        <label>Bike<select id="task-bike" required></select></label>
+        <label>Task name<input type="text" id="task-name" required placeholder="e.g. Engine oil"></label>
+        <label>Every (miles)<input type="number" id="task-miles" inputmode="numeric" min="1" step="1"></label>
+        <label>Every (months)<input type="number" id="task-months" inputmode="numeric" min="1" step="1"></label>
+      </div>
+      <label>Notes<textarea id="task-notes" rows="2" placeholder="e.g. filter part number, oil grade"></textarea></label>
+      <div id="task-quick"></div>
+      <button type="submit" class="primary">Add task</button>
+    </form>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="view-history" class="view">
+    <h2>Service history</h2>
+    <div class="grid">
+      <label>Bike<select id="history-bike"></select></label>
+      <label>Task<select id="history-task"></select></label>
+    </div>
+    <p id="history-total" class="card"></p>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- DATA -->
+  <section id="view-data" class="view">
+    <h2>Your data</h2>
+    <p class="muted">No account, no server, no sync. Your logbook lives in this browser's local storage. Back it up with Export — one JSON file.</p>
+    <p id="data-counts" class="card"></p>
+    <div class="card">
+      <h3>Export</h3>
+      <p class="muted">This file uses the exact same format as the <a href="https://github.com/JoshuaPopps/bike-maintenance-log">bike-maintenance-log CLI</a>'s <code>data.json</code> — import it there, or import a CLI export here, and the logbook carries over.</p>
+      <button id="export-btn" class="primary">Download JSON backup</button>
+      <button id="copy-export-btn" class="secondary">Copy JSON to clipboard</button>
+    </div>
+    <div class="card">
+      <h3>Import</h3>
+      <p class="muted">Import replaces the current logbook. Export first if you want to keep it.</p>
+      <label>From file<input type="file" id="import-file" accept=".json,application/json"></label>
+      <label>Or paste JSON<textarea id="import-text" rows="4"></textarea></label>
+      <button id="import-btn" class="primary">Import logbook</button>
+    </div>
+    <div class="card">
+      <h3>Try it out</h3>
+      <p class="muted">Loads an example logbook (example bike, example numbers) so you can see the OVERDUE / DUE SOON / ok badges before entering your own bike. Example intervals are placeholders, not factory specs.</p>
+      <button id="sample-btn" class="secondary">Load example data</button>
+      <button id="clear-btn" class="danger">Delete everything</button>
+    </div>
+  </section>
+</main>
+
+<nav class="bottomnav" aria-label="Sections">
+  <button class="navbtn active" data-view="due">🔧 Due</button>
+  <button class="navbtn" data-view="bikes">🏍️ Bikes &amp; Tasks</button>
+  <button class="navbtn" data-view="history">📖 History</button>
+  <button class="navbtn" data-view="data">💾 Data</button>
+</nav>
+
+<div id="toast" class="toast" role="status"></div>
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* offline use is optional */ });
+    });
+  }
+</script>
+</body>
+</html>
