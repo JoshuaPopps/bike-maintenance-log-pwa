@@ -5,14 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bike Maintenance Log</title>
 <meta name="description" content="A maintenance logbook for motorcycles. Track oil, tires, primary fluid, and every other service by miles and months — and see what's due before it bites you. Works offline, data stays on your device.">
-<meta name="theme-color" content="#1c1a17">
+<meta name="theme-color" content="#d8c99f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Chivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&family=Special+Elite&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="top">
-  <h1>🔧 Bike Maintenance Log</h1>
+  <p class="eyebrow">shop log &mdash; popps&rsquo;s garage</p>
+  <h1>Bike Maintenance Log</h1>
   <p class="tagline">What's due, what's overdue, and everything you've already done — in the book.</p>
 </header>
 
@@ -133,10 +137,10 @@
 </main>
 
 <nav class="bottomnav" aria-label="Sections">
-  <button class="navbtn active" data-view="due">🔧 Due</button>
-  <button class="navbtn" data-view="bikes">🏍️ Bikes &amp; Tasks</button>
-  <button class="navbtn" data-view="history">📖 History</button>
-  <button class="navbtn" data-view="data">💾 Data</button>
+  <button class="navbtn active" data-view="due">Due</button>
+  <button class="navbtn" data-view="bikes">Bikes &amp; Tasks</button>
+  <button class="navbtn" data-view="history">History</button>
+  <button class="navbtn" data-view="data">Data</button>
 </nav>
 
 <div id="toast" class="toast" role="status"></div>
