@@ -140,3 +140,22 @@ typed entry, so nothing is gated behind the catalog.
   Picking "Other" leaves manual entry working.
 - Service-worker cache bumped v1 → v2 so installed copies pick the
   picker up instead of serving the old cached shell.
+
+## v1.1.1 — picker brand-switch fix (2026-11-11)
+
+The v1.1.0 live check caught one real quirk: switching the brand
+picker after picking a model left the auto-filled Make / Model / Name
+in place (e.g. Fat Boy / Harley-Davidson still showing after switching
+to Triumph) until a new model was picked. The picker now remembers its
+last pick and clears only those auto-filled values on a brand switch;
+anything the user typed stays put. Verified in a real browser: picked
+values clear, typed values survive, picking a new model after the
+switch fills correctly. Node suite unchanged at 56/56.
+
+Note: the same live check also flagged a supposed missing-space typo
+("fromyourmanual") and extra model names (Iron 1200, Deluxe, Tri
+Glide). Both were checked against the served files and the rendered
+page — the paragraph renders correctly ("Intervals come from your
+manual") and the live app.js byte-matches the pushed commit, so those
+two were reporting artifacts, not app bugs. No change made for them.
+- Service-worker cache bumped v2 → v3.

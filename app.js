@@ -805,6 +805,9 @@ if (typeof document !== 'undefined') {
     var brandSel = document.getElementById('bike-brand-pick');
     var modelSel = document.getElementById('bike-model-pick');
     if (!brandSel || !modelSel) return;
+    /* What the picker last filled in — so a brand switch can clear
+     * only the picker's own values, never anything the user typed. */
+    var lastPick = { brand: '', model: '' };
     commonBrands().forEach(function (b) {
       var o = document.createElement('option');
       o.value = b; o.textContent = b;
@@ -822,6 +825,15 @@ if (typeof document !== 'undefined') {
     }
     brandSel.addEventListener('change', function () {
       var brand = brandSel.value;
+      /* Switching brands drops the previous pick's leftovers. Typed
+       * values that differ from the pick survive. */
+      var makeEl = document.getElementById('bike-make');
+      var modelEl = document.getElementById('bike-model');
+      var nameEl = document.getElementById('bike-name');
+      if (lastPick.brand && makeEl.value === lastPick.brand) makeEl.value = '';
+      if (lastPick.model && modelEl.value === lastPick.model) modelEl.value = '';
+      if (lastPick.model && nameEl.value === lastPick.model) nameEl.value = '';
+      lastPick = { brand: '', model: '' };
       if (!brand || brand === 'other') { resetModels(brand === 'other' ? '— Type the model below —' : '— Pick a brand first —'); return; }
       modelSel.innerHTML = '';
       modelSel.disabled = false;
@@ -851,6 +863,7 @@ if (typeof document !== 'undefined') {
       document.getElementById('bike-model').value = model;
       var nameEl = document.getElementById('bike-name');
       if (!nameEl.value.trim()) nameEl.value = model;
+      lastPick = { brand: brand, model: model };
     });
   })();
 
