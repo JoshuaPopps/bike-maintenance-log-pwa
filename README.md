@@ -31,12 +31,17 @@ and the two trade one JSON file back and forth.
   make and model not listed. Update its odometer, add tasks. Common task
   names (Engine oil, Primary fluid, Spark plugs, …) are one-tap
   buttons that fill in the name — **you set the interval from your
-  manual**. This app ships no service intervals of its own, because
-  the right number depends on the bike and the manual.
+  manual**. The Reference tab lists the factory intervals for the Evo
+  Softail as a starting point, but your manual wins for your bike.
 - **History tab** — every logged service, newest first, filterable by
   bike and task, with a running total of what you've spent.
 - **Data tab** — export the whole logbook as one JSON file, import a
   logbook back, load example data to try it out, or wipe everything.
+- **Reference tab** — factory service intervals, fluid specs, tire
+  pressures, and key torques for the Evo Softail, from the 1997–98
+  Softail Factory Service Manual #99482-98 §1. The example bike is a
+  1995 Fat Boy on the same platform; year-specific capacities are not
+  printed as 1995 specs.
 - **Installable & offline** — open it in Chrome (Android) or Safari
   (iPhone), "Add to Home Screen," and it works in the garage with no
   signal. A service worker caches the app shell; your logbook lives in
@@ -63,8 +68,11 @@ and works offline.
 Open the **Data** tab and tap **Load example data**. You get an
 example bike with four tasks that show all three states at once — one
 overdue, one due soon, two ok — so you can see the badges before
-entering your own bike. Example intervals are placeholders, not
-factory specs. Loading the example on top of a logbook you already
+entering your own bike. The example intervals are the factory numbers
+for the Evo Softail platform, from the 1997–98 Softail Factory Service
+Manual #99482-98 §1 (mileage-based only; the manual has no months legs
+and brake fluid is inspect-only) — the same numbers in the app's
+Reference tab. Loading the example on top of a logbook you already
 started is safe: it gets fresh ids, so it never overwrites your bikes
 or attaches its history to them. Delete it any time from Bikes &
 Tasks, or wipe everything from Data.
@@ -73,19 +81,18 @@ Example walkthrough (what the example logbook shows):
 
 ```
 Example 1995 Softail — odo 42,300 mi
-  OVERDUE   Brake fluid
+  OVERDUE   Brake fluid (inspect)
              last done Sep 04, 2025 @ 27,300 mi
-             61 days overdue (was Sep 04, 2026)
+             10,000 mi overdue
   DUE SOON  Engine oil
-             last done Jun 04, 2026 @ 39,500 mi
+             last done Jun 04, 2026 @ 37,500 mi
              due in 200 mi
-             due in 30 days (Dec 04, 2026)
   ok        Primary fluid
              last done Oct 04, 2026 @ 41,300 mi
-             due in 4,000 mi (@ 46,300)
-  ok        Tires
+             due in 4,000 mi (@ 46,300 mi)
+  ok        Tires (inspect)
              not logged yet — counting from task creation
-             due in 6,000 mi (@ 48,300)
+             due in 5,000 mi (@ 47,300 mi)
 ```
 
 (The example's dates are relative to the day you load it, so the
@@ -119,18 +126,21 @@ the app the same way. Verified both directions — see TESTING.md.
 
 ## On specs
 
-This app deliberately contains no service intervals, torque values,
-or capacities. Those come from the owner's or service manual for the
-specific bike, and guessing them is how parts get broken. The only
-numbers in the shipped example are labeled placeholders. If you want
-a reference section for a specific model the way the carb journal app
-has one for the CV40, that belongs in a follow-up with the manual
-open — not from memory.
+The app's only service numbers are the ones in the Reference tab and
+the example logbook, and they come from one source: the 1997–98
+Softail Factory Service Manual #99482-98, §1 — not from memory. The
+example bike is a 1995 Fat Boy on the same Evo Softail platform, so
+the intervals and fluid types carry over, but year-specific capacities
+are not printed as 1995 specs. For any other bike, the numbers come
+from that bike's own manual — guessing them is how parts get broken.
+
+Brake fluid is the one to get right: **DOT 5 silicone ONLY, never mix
+with DOT 3/4** (§1, p.1-42; part nos. 99902-77 / 99901-77).
 
 ## Tests
 
 ```bash
-node test.js   # core logic: 46 checks, no dependencies
+node test.js   # core logic: 61 checks, no dependencies
 ```
 
 The core logic (due math, odometer rules, import validation, sample

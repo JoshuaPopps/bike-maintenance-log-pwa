@@ -240,6 +240,23 @@ check('daysBetween counts backward as negative', app.daysBetween('2026-11-04', '
     s.bikes[bid].odometer === 42300);
 })();
 
+/* --- sample follows FSM #99482-98 §1: no DOT 4, no months legs --- */
+(function () {
+  var s = app.sampleStore();
+  var byName = {};
+  Object.keys(s.tasks).forEach(function (tid) { byName[s.tasks[tid].name] = s.tasks[tid]; });
+  check('sample oil is 5,000 mi, no months leg',
+    byName['Engine oil'].every_miles === 5000 && !byName['Engine oil'].every_months);
+  check('sample brake fluid is inspect-only at 5,000 mi, no months leg',
+    byName['Brake fluid (inspect)'].every_miles === 5000 && !byName['Brake fluid (inspect)'].every_months);
+  check('sample tires inspect at 5,000 mi, not 6,000',
+    byName['Tires (inspect)'].every_miles === 5000);
+  check('no DOT 4 anywhere in the sample logbook',
+    JSON.stringify(s).indexOf('DOT 4') === -1);
+  check('sample brake note says DOT 5 silicone ONLY',
+    byName['Brake fluid (inspect)'].notes.indexOf('DOT 5 silicone ONLY') >= 0);
+})();
+
 /* --- common-bikes catalog --- */
 check('catalog has the six brands, in order',
   JSON.stringify(app.commonBrands()) === JSON.stringify(['Harley-Davidson', 'Triumph', 'Honda', 'Suzuki', 'Kawasaki', 'Yamaha']));

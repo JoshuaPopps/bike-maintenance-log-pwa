@@ -129,9 +129,46 @@
     </div>
     <div class="card">
       <h3>Try it out</h3>
-      <p class="muted">Loads an example logbook (example bike, example numbers) so you can see the OVERDUE / DUE SOON / ok badges before entering your own bike. Example intervals are placeholders, not factory specs.</p>
+      <p class="muted">Loads an example logbook (example bike) so you can see the OVERDUE / DUE SOON / ok badges before entering your own bike. The example intervals follow the 1997–98 Softail factory service manual — see the Reference tab.</p>
       <button id="sample-btn" class="secondary">Load example data</button>
       <button id="clear-btn" class="danger">Delete everything</button>
+    </div>
+  </section>
+
+  <!-- REFERENCE -->
+  <section id="view-reference" class="view">
+    <h2>Service reference — Evo Softail</h2>
+    <p class="muted">From the 1997–98 Softail Factory Service Manual #99482-98, §1. The example bike is a 1995 Fat Boy — same Evo Softail platform, so the intervals and fluid types carry over, but year-specific capacities are <b>not</b> printed here as 1995 specs. Your manual wins if it disagrees.</p>
+    <div class="card">
+      <h3>Service intervals — mileage-based only</h3>
+      <ul>
+        <li><b>Engine oil + filter</b> — first service 500 mi, then every 5,000 mi</li>
+        <li><b>Transmission fluid</b> — replace every 5,000 mi; 24 oz HD Transmission Lubricant (99892-84)</li>
+        <li><b>Fork oil (Fat Boy)</b> — replace every 10,000 mi; Type E, 11.5 oz/leg wet</li>
+        <li><b>Spark plugs</b> — inspect 10,000 mi / replace 20,000 mi; 5R6A, gap 0.038–0.043 in., torque 18–22 ft-lbs</li>
+        <li><b>Drive belt</b> — inspect every 5,000 mi; deflection 3/8–1/2 in. under 10 lbs, top strand, cold, rider aboard, tightest point</li>
+        <li><b>Clutch adjustment</b> — every 5,000 mi; lever free play 1/16–1/8 in.</li>
+        <li><b>Tires</b> — inspect at every 5,000-mi service; replace on condition/wear, not on mileage</li>
+        <li><b>Brake fluid</b> — inspect only; no replacement interval in the manual</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Brakes — DOT 5 silicone ONLY</h3>
+      <p>DOT 5 silicone brake fluid only — never mix with DOT 3/4. Part nos. 99902-77 / 99901-77 (§1, p.1-42). Brake pad minimum thickness 0.0625 in.</p>
+    </div>
+    <div class="card">
+      <h3>Tire pressures — FLSTF, cold</h3>
+      <p>Solo: 36 psi front / 36 psi rear. With passenger: 36 psi front / 40 psi rear.</p>
+    </div>
+    <div class="card">
+      <h3>Key torques</h3>
+      <ul>
+        <li><b>Rear axle</b> — 60–65 ft-lbs</li>
+        <li><b>Front axle</b> — 45–50 ft-lbs</li>
+        <li><b>Primary cover</b> — 108–120 in-lbs</li>
+        <li><b>Banjo bolts</b> — 17–22 ft-lbs</li>
+        <li><b>Spark plugs</b> — 18–22 ft-lbs</li>
+      </ul>
     </div>
   </section>
 </main>
@@ -141,6 +178,7 @@
   <button class="navbtn" data-view="bikes">Bikes &amp; Tasks</button>
   <button class="navbtn" data-view="history">History</button>
   <button class="navbtn" data-view="data">Data</button>
+  <button class="navbtn" data-view="reference">Reference</button>
 </nav>
 
 <div id="toast" class="toast" role="status"></div>

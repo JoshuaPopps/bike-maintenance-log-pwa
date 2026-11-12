@@ -473,8 +473,13 @@ function validateImport(data) {
 }
 
 /* Example logbook — dates relative to today so the OVERDUE / DUE SOON /
- * ok spread stays true whenever it is loaded. Every number is an
- * EXAMPLE placeholder, not a factory spec. */
+ * ok spread stays true whenever it is loaded. The example intervals are
+ * the factory numbers for the Evo Softail platform, from the 1997–98
+ * Softail Factory Service Manual #99482-98 §1 (mileage-based only — the
+ * manual has no months legs and brake fluid is inspect-only). The
+ * example bike is a 1995 Fat Boy on the same platform, so the intervals
+ * and fluid types carry over; year-specific capacities are not printed
+ * here as 1995 specs. */
 function sampleStore() {
   var store = emptyStore();
   var now = todayISO();
@@ -485,23 +490,23 @@ function sampleStore() {
   var bid = Object.keys(store.bikes)[0];
   bike = store.bikes[bid];
   function monthsAgo(n) { return addMonths(now, -n); }
-  var oil = addTask(store, { bike_id: bid, name: 'Engine oil', every_miles: '3000', every_months: '6', notes: 'Example interval — use your manual.' });
+  var oil = addTask(store, { bike_id: bid, name: 'Engine oil', every_miles: '5000', every_months: '', notes: 'FSM #99482-98 §1: first service 500 mi, then every 5,000 mi (oil + filter).' });
   var primary = addTask(store, { bike_id: bid, name: 'Primary fluid', every_miles: '5000', every_months: '', notes: 'Example interval — use your manual.' });
-  var brakes = addTask(store, { bike_id: bid, name: 'Brake fluid', every_miles: '', every_months: '12', notes: 'Example interval — use your manual.' });
-  var tires = addTask(store, { bike_id: bid, name: 'Tires', every_miles: '6000', every_months: '', notes: 'Example interval — use your manual.' });
+  var brakes = addTask(store, { bike_id: bid, name: 'Brake fluid (inspect)', every_miles: '5000', every_months: '', notes: 'Inspect only — DOT 5 silicone ONLY, never mix with DOT 3/4. FSM #99482-98 §1, p.1-42.' });
+  var tires = addTask(store, { bike_id: bid, name: 'Tires (inspect)', every_miles: '5000', every_months: '', notes: 'Inspect at every 5,000-mi service — replace on condition/wear, not on mileage. FSM #99482-98 §1.' });
   var oilId = Object.keys(store.tasks).filter(function (id) { return store.tasks[id].name === 'Engine oil'; })[0];
   var primaryId = Object.keys(store.tasks).filter(function (id) { return store.tasks[id].name === 'Primary fluid'; })[0];
-  var brakesId = Object.keys(store.tasks).filter(function (id) { return store.tasks[id].name === 'Brake fluid'; })[0];
+  var brakesId = Object.keys(store.tasks).filter(function (id) { return store.tasks[id].name === 'Brake fluid (inspect)'; })[0];
   void oil; void primary; void brakes; void tires;
-  /* Oil: 2,800 mi ago, 5 months ago -> 200 mi left (due soon). */
-  logService(store, { bike_id: bid, task_id: oilId, date: monthsAgo(5), odometer: '39500', cost: '48.50', notes: '20W-50, new filter' });
+  /* Oil: 4,800 mi ago -> 200 mi left (due soon). */
+  logService(store, { bike_id: bid, task_id: oilId, date: monthsAgo(5), odometer: '37500', cost: '48.50', notes: '20W-50, new filter' });
   /* Primary: 1,000 mi ago, 1 month ago -> comfortably ok. */
   logService(store, { bike_id: bid, task_id: primaryId, date: monthsAgo(1), odometer: '41300', cost: '18.00', notes: '' });
-  /* Brakes: 14 months ago -> overdue on the time leg. */
-  logService(store, { bike_id: bid, task_id: brakesId, date: monthsAgo(14), odometer: '27300', cost: '12.00', notes: 'DOT 4, bled both calipers' });
+  /* Brakes: last inspected 15,000 mi ago -> overdue on the miles leg. */
+  logService(store, { bike_id: bid, task_id: brakesId, date: monthsAgo(14), odometer: '27300', cost: '12.00', notes: 'DOT 5 silicone ONLY, bled both calipers' });
   /* Tires: never logged -> counts from task creation, ok. */
   /* Restore the bike odometer the services advanced past the sample's
-   * headline reading: services logged at 39,500 / 41,300 / 27,300 must
+   * headline reading: services logged at 37,500 / 41,300 / 27,300 must
    * not drag the bike backwards, so pin it to the headline value. */
   bike.odometer = 42300;
   bike.odometer_date = now;
