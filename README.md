@@ -25,7 +25,10 @@ and the two trade one JSON file back and forth.
   from task creation), and a **Log** button that pre-fills the service
   form for that task.
 - **Bikes & Tasks tab** — multiple bikes, each with its own tasks and
-  odometer. Add a bike, update its odometer, add tasks. Common task
+  odometer. Add a bike by picking from the common-bikes catalog
+  (Harley-Davidson, Triumph, Honda, Suzuki, Kawasaki, Yamaha — 106
+  models grouped by family, e.g. Softail → Fat Boy) or by typing any
+  make and model not listed. Update its odometer, add tasks. Common task
   names (Engine oil, Primary fluid, Spark plugs, …) are one-tap
   buttons that fill in the name — **you set the interval from your
   manual**. This app ships no service intervals of its own, because

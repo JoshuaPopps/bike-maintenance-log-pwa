@@ -28,6 +28,70 @@ var QUICK_TASKS = [
   'Coolant', 'Fork oil', 'Clutch adjustment'
 ];
 
+/* Common production bikes, by brand, grouped by family — so adding a
+ * bike is a pick, not typing. Model names only: no years, no trims
+ * invented, no specs attached. Anything not listed is still a free
+ * text entry in the form. */
+var COMMON_BIKES = [
+  { brand: 'Harley-Davidson', families: [
+    { family: 'Sportster', models: ['Iron 883', 'Forty-Eight', 'Roadster', 'SuperLow', 'Custom 1200', 'Nightster', 'Sportster S'] },
+    { family: 'Softail', models: ['Standard', 'Street Bob', 'Fat Bob', 'Fat Boy', 'Heritage Classic', 'Low Rider S', 'Low Rider ST', 'Breakout'] },
+    { family: 'Dyna', models: ['Street Bob', 'Low Rider', 'Wide Glide', 'Super Glide', 'Fat Bob'] },
+    { family: 'Touring', models: ['Street Glide', 'Road Glide', 'Road King', 'Electra Glide Classic', 'Ultra Limited'] },
+    { family: 'Adventure & electric', models: ['Pan America 1250', 'LiveWire'] }
+  ] },
+  { brand: 'Triumph', families: [
+    { family: 'Bonneville', models: ['T100', 'T120', 'Street Twin', 'Speed Twin', 'Bobber', 'Speedmaster', 'Thruxton'] },
+    { family: 'Tiger', models: ['Tiger 900', 'Tiger 1200', 'Tiger Sport 660'] },
+    { family: 'Triple', models: ['Street Triple', 'Speed Triple 1200'] },
+    { family: 'Scrambler', models: ['Scrambler 900', 'Scrambler 1200'] },
+    { family: 'Other', models: ['Trident 660', 'Rocket 3', 'Daytona 660'] }
+  ] },
+  { brand: 'Honda', families: [
+    { family: 'CB', models: ['CB500F', 'CB650R', 'CB1000R', 'CB1100'] },
+    { family: 'CBR', models: ['CBR500R', 'CBR600RR', 'CBR1000RR Fireblade'] },
+    { family: 'Gold Wing', models: ['Gold Wing', 'Gold Wing Tour'] },
+    { family: 'Africa Twin', models: ['Africa Twin', 'Africa Twin Adventure Sports'] },
+    { family: 'Rebel', models: ['Rebel 300', 'Rebel 500', 'Rebel 1100'] },
+    { family: 'Other', models: ['Grom', 'Monkey', 'NC750X'] }
+  ] },
+  { brand: 'Suzuki', families: [
+    { family: 'GSX-R', models: ['GSX-R600', 'GSX-R750', 'GSX-R1000'] },
+    { family: 'GSX-S', models: ['GSX-S750', 'GSX-S1000', 'Katana'] },
+    { family: 'V-Strom', models: ['V-Strom 650', 'V-Strom 1050'] },
+    { family: 'Boulevard', models: ['Boulevard M109R', 'Boulevard C50'] },
+    { family: 'Other', models: ['SV650', 'DR650S', 'DR-Z400S'] }
+  ] },
+  { brand: 'Kawasaki', families: [
+    { family: 'Ninja', models: ['Ninja 400', 'Ninja 650', 'Ninja ZX-6R', 'Ninja ZX-10R'] },
+    { family: 'Z', models: ['Z400', 'Z650', 'Z900', 'Z H2'] },
+    { family: 'Vulcan', models: ['Vulcan S', 'Vulcan 900', 'Vulcan 1700 Vaquero'] },
+    { family: 'Versys', models: ['Versys 650', 'Versys 1000'] },
+    { family: 'Other', models: ['KLR650', 'W800'] }
+  ] },
+  { brand: 'Yamaha', families: [
+    { family: 'MT', models: ['MT-03', 'MT-07', 'MT-09', 'MT-10'] },
+    { family: 'YZF-R', models: ['YZF-R3', 'YZF-R6', 'YZF-R7', 'YZF-R1'] },
+    { family: 'Other', models: ['FJR1300', 'Bolt', 'Bolt R-Spec', 'Tracer 9 GT', 'Ténéré 700', 'XSR700', 'XSR900', 'V Star 650', 'V Star 1300'] }
+  ] }
+];
+
+function commonBrands() {
+  return COMMON_BIKES.map(function (b) { return b.brand; });
+}
+
+/* Flat list of { family, model } for one brand, in catalog order. */
+function commonModels(brand) {
+  var out = [];
+  COMMON_BIKES.forEach(function (b) {
+    if (b.brand !== brand) return;
+    b.families.forEach(function (f) {
+      f.models.forEach(function (m) { out.push({ family: f.family, model: m }); });
+    });
+  });
+  return out;
+}
+
 /* ------------------------------------------------------------------ */
 /* Store                                                               */
 /* ------------------------------------------------------------------ */
@@ -734,6 +798,62 @@ if (typeof document !== 'undefined') {
     } catch (e) { toast(e.message, true); }
   });
 
+  /* Common-bike picker: brand -> model fills Make / Model / Name.
+   * The text fields stay editable, so anything not listed is still
+   * a plain typed entry. */
+  (function () {
+    var brandSel = document.getElementById('bike-brand-pick');
+    var modelSel = document.getElementById('bike-model-pick');
+    if (!brandSel || !modelSel) return;
+    commonBrands().forEach(function (b) {
+      var o = document.createElement('option');
+      o.value = b; o.textContent = b;
+      brandSel.appendChild(o);
+    });
+    var otherBrand = document.createElement('option');
+    otherBrand.value = 'other'; otherBrand.textContent = 'Other / not listed — type it below';
+    brandSel.appendChild(otherBrand);
+    function resetModels(prompt) {
+      modelSel.innerHTML = '';
+      modelSel.disabled = true;
+      var o = document.createElement('option');
+      o.value = ''; o.textContent = prompt;
+      modelSel.appendChild(o);
+    }
+    brandSel.addEventListener('change', function () {
+      var brand = brandSel.value;
+      if (!brand || brand === 'other') { resetModels(brand === 'other' ? '— Type the model below —' : '— Pick a brand first —'); return; }
+      modelSel.innerHTML = '';
+      modelSel.disabled = false;
+      var ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '— Pick a model —';
+      modelSel.appendChild(ph);
+      var lastFamily = null, group = null;
+      commonModels(brand).forEach(function (entry) {
+        if (entry.family !== lastFamily) {
+          group = document.createElement('optgroup');
+          group.label = entry.family;
+          modelSel.appendChild(group);
+          lastFamily = entry.family;
+        }
+        var o = document.createElement('option');
+        o.value = entry.model; o.textContent = entry.model;
+        group.appendChild(o);
+      });
+      var other = document.createElement('option');
+      other.value = 'other'; other.textContent = 'Other / not listed — type it below';
+      modelSel.appendChild(other);
+    });
+    modelSel.addEventListener('change', function () {
+      var brand = brandSel.value, model = modelSel.value;
+      if (!brand || !model || model === 'other') return;
+      document.getElementById('bike-make').value = brand;
+      document.getElementById('bike-model').value = model;
+      var nameEl = document.getElementById('bike-name');
+      if (!nameEl.value.trim()) nameEl.value = model;
+    });
+  })();
+
   document.getElementById('bike-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     try {
@@ -875,6 +995,8 @@ if (typeof module !== 'undefined' && module.exports) {
     validateImport: validateImport, sampleStore: sampleStore,
     mergeSample: mergeSample,
     addMonths: addMonths, daysBetween: daysBetween,
+    COMMON_BIKES: COMMON_BIKES, commonBrands: commonBrands,
+    commonModels: commonModels,
     SOON_MILES: SOON_MILES, SOON_DAYS: SOON_DAYS
   };
 }

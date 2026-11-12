@@ -240,5 +240,45 @@ check('daysBetween counts backward as negative', app.daysBetween('2026-11-04', '
     s.bikes[bid].odometer === 42300);
 })();
 
+/* --- common-bikes catalog --- */
+check('catalog has the six brands, in order',
+  JSON.stringify(app.commonBrands()) === JSON.stringify(['Harley-Davidson', 'Triumph', 'Honda', 'Suzuki', 'Kawasaki', 'Yamaha']));
+(function () {
+  var total = 0, ok = true;
+  app.COMMON_BIKES.forEach(function (b) {
+    if (!b.brand || !b.families || !b.families.length) ok = false;
+    b.families.forEach(function (f) {
+      if (!f.family || !f.models || !f.models.length) ok = false;
+      var seen = {};
+      f.models.forEach(function (m) {
+        if (!m || typeof m !== 'string' || !m.trim()) ok = false;
+        if (seen[m]) ok = false;
+        seen[m] = true;
+        total++;
+      });
+    });
+  });
+  check('every brand has families, every family has non-empty models, no dupes in a family', ok);
+  check('catalog holds 100+ models', total >= 100);
+})();
+check('commonModels of an unknown brand is empty', app.commonModels('No Such Brand').length === 0);
+check('Harley Softail family includes Fat Boy',
+  app.commonModels('Harley-Davidson').some(function (e) { return e.family === 'Softail' && e.model === 'Fat Boy'; }));
+check('Triumph includes Tiger 900 and Bonneville T120',
+  app.commonModels('Triumph').some(function (e) { return e.model === 'Tiger 900'; }) &&
+  app.commonModels('Triumph').some(function (e) { return e.model === 'T120'; }));
+check('Honda includes Gold Wing and Rebel 500',
+  app.commonModels('Honda').some(function (e) { return e.model === 'Gold Wing'; }) &&
+  app.commonModels('Honda').some(function (e) { return e.model === 'Rebel 500'; }));
+check('Suzuki includes SV650 and V-Strom 650',
+  app.commonModels('Suzuki').some(function (e) { return e.model === 'SV650'; }) &&
+  app.commonModels('Suzuki').some(function (e) { return e.model === 'V-Strom 650'; }));
+check('Kawasaki includes Ninja 650 and Z900',
+  app.commonModels('Kawasaki').some(function (e) { return e.model === 'Ninja 650'; }) &&
+  app.commonModels('Kawasaki').some(function (e) { return e.model === 'Z900'; }));
+check('Yamaha includes MT-07 and YZF-R6',
+  app.commonModels('Yamaha').some(function (e) { return e.model === 'MT-07'; }) &&
+  app.commonModels('Yamaha').some(function (e) { return e.model === 'YZF-R6'; }));
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

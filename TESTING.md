@@ -114,3 +114,29 @@ link. No personal or system information ships in the app.
 - Tested on Node 24 (tests) and Python 3.12 (server); the app itself
   is plain ES5-era JavaScript and CSS with no build step, written to
   run in any modern mobile browser.
+
+## v1.1.0 — common-bikes picker (2026-11-11)
+
+Adding a bike used to mean typing make and model freehand every time.
+Now the Add-a-bike form opens with a brand picker (Harley-Davidson,
+Triumph, Honda, Suzuki, Kawasaki, Yamaha) and a model picker grouped
+by family (optgroups — e.g. Harley → Softail → Fat Boy, Street Bob,
+Heritage Classic). Picking a model fills Make, Model, and Name (only
+if Name is empty — it never overwrites what you typed). "Other / not
+listed" on either picker leaves the text fields alone for a plain
+typed entry, so nothing is gated behind the catalog.
+
+- Catalog: 106 models, model names only — no years, no trims, no specs
+  attached, nothing invented. Street Bob and Fat Bob appear under both
+  Softail and Dyna on purpose (both eras are real); the year you type
+  tells them apart.
+- Node tests grew from 46 to 56: brand order, every family non-empty,
+  no empty or duplicate model names inside a family, 100+ models
+  total, unknown brand returns empty, and a spot check per brand
+  (Fat Boy, T120, Gold Wing, SV650, Z900, MT-07).
+- Real-browser check (Playwright): pick Harley-Davidson → model
+  select shows the Softail group with Fat Boy → picking it fills
+  Make/Model/Name → submitting adds the bike → it shows in the list.
+  Picking "Other" leaves manual entry working.
+- Service-worker cache bumped v1 → v2 so installed copies pick the
+  picker up instead of serving the old cached shell.

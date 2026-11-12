@@ -46,6 +46,19 @@
     <h3>Add a bike</h3>
     <form id="bike-form" class="card">
       <div class="grid">
+        <label>Pick a common bike — brand
+          <select id="bike-brand-pick">
+            <option value="">— Pick a brand —</option>
+          </select>
+        </label>
+        <label>Model
+          <select id="bike-model-pick" disabled>
+            <option value="">— Pick a brand first —</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted">Picking a model fills in the make, model, and name below — edit anything. Or just type the make and model yourself; anything not listed works the same way.</p>
+      <div class="grid">
         <label>Name<input type="text" id="bike-name" required placeholder="e.g. Example 1995 Softail"></label>
         <label>Year<input type="text" id="bike-year" inputmode="numeric" placeholder="1995"></label>
         <label>Make<input type="text" id="bike-make" placeholder="Harley-Davidson"></label>

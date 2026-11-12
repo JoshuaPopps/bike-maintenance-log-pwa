@@ -1,6 +1,6 @@
 /* Bike Maintenance Log service worker — app-shell cache so the logbook
  * works offline in the garage. Version the cache name on release. */
-var CACHE = 'bike-maintenance-log-v1';
+var CACHE = 'bike-maintenance-log-v2';
 var ASSETS = [
   './', './index.html', './styles.css', './app.js',
   './manifest.webmanifest',
