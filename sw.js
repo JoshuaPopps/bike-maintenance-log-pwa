@@ -1,10 +1,10 @@
 /* Bike Maintenance Log service worker — app-shell cache so the logbook
  * works offline in the garage. Version the cache name on release. */
-var CACHE = 'bike-maintenance-log-v8';
+var CACHE = 'bike-maintenance-log-v9';
 var ASSETS = [
   './', './index.html', './styles.css', './app.js',
   './manifest.webmanifest',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg'
+  './icons/icon-192.png', './icons/icon-512.png'
 ];
 
 self.addEventListener('install', function (event) {
