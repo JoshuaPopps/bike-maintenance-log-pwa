@@ -9,10 +9,15 @@
  * Field keys (odometer, every_miles, every_months, baseline_odo, ...)
  * match the CLI exactly.
  *
- * Spec rule, same as the CLI: this app ships NO service intervals of
- * its own. Intervals come from the owner's manual for the bike in
- * question. The example logbook's intervals are placeholders, clearly
- * labelled as such, never presented as factory specs.
+ * Spec rule: the app ships factory service schedules ONLY where they
+ * are sourced from a published manual — right now, the 1984–1999 Evo
+ * Softail schedule from FSM #99482-98 (see FACTORY_SCHEDULES; every
+ * filled-in task names its source). Models without a sourced schedule
+ * get no auto-fill at all, and the example logbook's intervals are
+ * placeholders, clearly labelled as such, never presented as factory
+ * specs. Auto-filled tasks are plain tasks with a source note, so the
+ * CLI data model is untouched and the JSON trades back and forth the
+ * same as ever.
  */
 'use strict';
 
@@ -90,6 +95,115 @@ function commonModels(brand) {
     });
   });
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Factory schedules (sourced only — never invented)                   */
+/* ------------------------------------------------------------------ */
+
+/* Factory service schedules, one entry per platform. Intervals come
+ * ONLY from the published manual named in `source` — the first
+ * service at 500 mi, then the listed miles interval, per FSM
+ * #99482-98 §1 "Service Intervals". The schedule is miles-only: the
+ * manual gives no months interval for these jobs, so every_months
+ * stays empty and the miles leg drives the due date.
+ *
+ * Scope is deliberately narrow: the manuals on the shelf cover the
+ * 1984–1999 Evo Softails (FLSTC, FLSTF, FLSTS, FXSTC, FXSTS,
+ * FXSTSB, FXST). Of the picker's Softail names, Fat Boy (FLSTF) and
+ * Heritage Classic (FLSTC) are named in #99482-98 itself; Standard
+ * (FXST) is the base model of the same platform, covered by the
+ * 1984–99 Softail Repair Manual's maintenance schedule (Table 2) —
+ * same 5,000 / 10,000 / 20,000 mi pattern, corroborated in the
+ * repair manual text (wheel bearings and spark plugs at 10,000 mi).
+ * Springer models are not in the picker, so the springer-only items
+ * (rocker bearings, greasing the steering head at every interval)
+ * are not in this schedule. Dealer-inspection-only lines from the
+ * manual's table (engine mounts, fasteners, road test, …) are left
+ * out on purpose — auto-fill is the owner-serviceable jobs; anything
+ * else the user adds by hand.
+ *
+ * Every task's `notes` names its source, so the filled-in list shows
+ * where each interval came from in the UI. A model with no entry
+ * here gets NO auto-fill — never an invented interval. */
+var FACTORY_SCHEDULES = [
+  {
+    make: 'Harley-Davidson',
+    models: ['Fat Boy', 'Heritage Classic', 'Standard'],
+    years: [1984, 1999],
+    label: 'Evo Softail (1984–1999)',
+    shortSource: 'FSM #99482-98',
+    source: 'Harley-Davidson Softail FSM #99482-98 (1997–98), Service Intervals §1; corroborated by the 1984–99 Softail Repair Manual',
+    tasks: [
+      { name: 'Engine oil', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: replace engine oil + filter every 5,000 mi.' },
+      { name: 'Primary fluid', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: replace primary chaincase lubricant every 5,000 mi.' },
+      { name: 'Transmission fluid', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: replace transmission lubricant every 5,000 mi.' },
+      { name: 'Clutch adjustment', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: check/adjust every 5,000 mi.' },
+      { name: 'Drive belt', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect every 5,000 mi (deflection 3/8–1/2 in).' },
+      { name: 'Brake fluid', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect level/condition every 5,000 mi (DOT 5 only).' },
+      { name: 'Tires', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect every 5,000 mi.' },
+      { name: 'Air filter', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect air cleaner every 5,000 mi.' },
+      { name: 'Battery', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect every 5,000 mi.' },
+      { name: 'Primary chain', every_miles: 5000, notes: 'Factory schedule — FSM #99482-98: inspect/adjust every 5,000 mi.' },
+      { name: 'Fork oil', every_miles: 10000, notes: 'Factory schedule — FSM #99482-98: replace every 10,000 mi (hydraulic forks).' },
+      { name: 'Wheel bearings', every_miles: 10000, notes: 'Factory schedule — FSM #99482-98: remove, inspect, repack every 10,000 mi.' },
+      { name: 'Fuel tank filter', every_miles: 10000, notes: 'Factory schedule — FSM #99482-98: replace every 10,000 mi.' },
+      { name: 'Throttle cables', every_miles: 10000, notes: 'Factory schedule — FSM #99482-98: lubricate every 10,000 mi.' },
+      { name: 'Spark plugs', every_miles: 20000, notes: 'Factory schedule — FSM #99482-98: replace every 20,000 mi (inspect at 10,000).' },
+      { name: 'Steering head bearings', every_miles: 20000, notes: 'Factory schedule — FSM #99482-98: remove, inspect, repack every 20,000 mi.' }
+    ]
+  }
+];
+
+/* The schedule for a make/model regardless of year (picker hint). */
+function factoryScheduleModel(make, model) {
+  var m = String(make || '').trim().toLowerCase();
+  var mo = String(model || '').trim().toLowerCase();
+  for (var i = 0; i < FACTORY_SCHEDULES.length; i++) {
+    var s = FACTORY_SCHEDULES[i];
+    if (m !== s.make.toLowerCase()) continue;
+    var hit = false;
+    s.models.forEach(function (name) { if (name.toLowerCase() === mo) hit = true; });
+    if (hit) return s;
+  }
+  return null;
+}
+
+/* The schedule for a make/model/year — null when the year is missing,
+ * out of the covered range, or the model has no sourced schedule. */
+function factoryScheduleFor(make, model, year) {
+  var y = year == null || year === '' ? null : Number(year);
+  if (y == null || isNaN(y)) return null;
+  var s = factoryScheduleModel(make, model);
+  if (!s) return null;
+  if (y < s.years[0] || y > s.years[1]) return null;
+  return s;
+}
+
+/* Fill a bike's task list from its factory schedule. Adds only tasks
+ * the bike does not already have (matched by name, case-insensitive)
+ * — a task the user set keeps its own interval and notes, and
+ * re-running adds nothing. Returns { added, skipped, schedule }. */
+function applyFactorySchedule(store, bikeId) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Bike not found.');
+  var sched = factoryScheduleFor(b.make, b.model, b.year);
+  if (!sched) return { added: 0, skipped: 0, schedule: null };
+  var added = 0, skipped = 0;
+  sched.tasks.forEach(function (st) {
+    var exists = Object.keys(store.tasks).some(function (id) {
+      var t = store.tasks[id];
+      return t.bike_id === bikeId && t.name.toLowerCase() === st.name.toLowerCase();
+    });
+    if (exists) { skipped++; return; }
+    addTask(store, {
+      bike_id: bikeId, name: st.name,
+      every_miles: st.every_miles, every_months: '',
+      notes: st.notes
+    });
+    added++;
+  });
+  return { added: added, skipped: skipped, schedule: sched };
 }
 
 /* ------------------------------------------------------------------ */
@@ -839,6 +953,8 @@ if (typeof document !== 'undefined') {
       if (lastPick.model && modelEl.value === lastPick.model) modelEl.value = '';
       if (lastPick.model && nameEl.value === lastPick.model) nameEl.value = '';
       lastPick = { brand: '', model: '' };
+      var hint = document.getElementById('bike-schedule-hint');
+      if (hint) hint.textContent = '';
       if (!brand || brand === 'other') { resetModels(brand === 'other' ? '— Type the model below —' : '— Pick a brand first —'); return; }
       modelSel.innerHTML = '';
       modelSel.disabled = false;
@@ -869,13 +985,23 @@ if (typeof document !== 'undefined') {
       var nameEl = document.getElementById('bike-name');
       if (!nameEl.value.trim()) nameEl.value = model;
       lastPick = { brand: brand, model: model };
+      /* Factory-schedule hint: a model with a sourced schedule says
+       * so (and which years it covers); anything else says plainly
+       * that there is none, so the user adds tasks from the manual. */
+      var hint = document.getElementById('bike-schedule-hint');
+      if (hint) {
+        var sched = factoryScheduleModel(brand, model);
+        hint.textContent = sched
+          ? 'Factory schedule on file: ' + sched.label + ' (' + sched.shortSource + '). Enter the year and the task list fills in when you save the bike.'
+          : 'No factory schedule on file for this model — add tasks from your manual.';
+      }
     });
   })();
 
   document.getElementById('bike-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     try {
-      addBike(store, {
+      var bike = addBike(store, {
         name: document.getElementById('bike-name').value,
         year: document.getElementById('bike-year').value,
         make: document.getElementById('bike-make').value,
@@ -883,10 +1009,26 @@ if (typeof document !== 'undefined') {
         odometer: document.getElementById('bike-odometer').value,
         notes: document.getElementById('bike-notes').value
       });
+      /* Factory auto-fill: the new bike's task list fills from its
+       * sourced schedule when one matches (make + model + year).
+       * It only adds tasks the bike does not have — nothing the
+       * user set is ever touched. */
+      var bid = Object.keys(store.bikes).filter(function (id) { return store.bikes[id] === bike; })[0];
+      var filled = applyFactorySchedule(store, bid);
       saveStore(store);
       renderAll();
       ev.target.reset();
-      toast('Bike added.');
+      var hintEl = document.getElementById('bike-schedule-hint');
+      if (hintEl) hintEl.textContent = '';
+      if (filled.schedule && filled.added > 0) {
+        toast('Bike added — ' + filled.added + ' factory tasks filled in (' + filled.schedule.shortSource + ').');
+      } else if (filled.schedule) {
+        toast('Bike added — factory tasks already there.');
+      } else if (factoryScheduleModel(bike.make, bike.model)) {
+        toast('Bike added — factory schedule covers ' + factoryScheduleModel(bike.make, bike.model).years[0] + '–' + factoryScheduleModel(bike.make, bike.model).years[1] + '; add the year to auto-fill.');
+      } else {
+        toast('Bike added.');
+      }
     } catch (e) { toast(e.message, true); }
   });
 
@@ -1015,6 +1157,10 @@ if (typeof module !== 'undefined' && module.exports) {
     addMonths: addMonths, daysBetween: daysBetween,
     COMMON_BIKES: COMMON_BIKES, commonBrands: commonBrands,
     commonModels: commonModels,
+    FACTORY_SCHEDULES: FACTORY_SCHEDULES,
+    factoryScheduleFor: factoryScheduleFor,
+    factoryScheduleModel: factoryScheduleModel,
+    applyFactorySchedule: applyFactorySchedule,
     SOON_MILES: SOON_MILES, SOON_DAYS: SOON_DAYS
   };
 }

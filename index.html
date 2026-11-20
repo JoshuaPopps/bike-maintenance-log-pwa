@@ -62,6 +62,7 @@
         </label>
       </div>
       <p class="muted">Picking a model fills in the make, model, and name below — edit anything. Or just type the make and model yourself; anything not listed works the same way.</p>
+      <p id="bike-schedule-hint" class="muted"></p>
       <div class="grid">
         <label>Name<input type="text" id="bike-name" required placeholder="e.g. Example 1995 Softail"></label>
         <label>Year<input type="text" id="bike-year" inputmode="numeric" placeholder="1995"></label>
@@ -84,7 +85,7 @@
     </form>
 
     <h3>Add a task</h3>
-    <p class="muted">Intervals come from <b>your</b> manual, not from this app — no intervals are pre-filled, because the right number depends on the bike and the manual. Tap a common name to fill it in, then set the interval yourself.</p>
+    <p class="muted">Factory intervals fill in automatically for 1984–1999 Evo Softails when you add the bike — every filled-in task names its manual. Anything else: intervals come from <b>your</b> manual, not from this app. Tap a common name to fill it in, then set the interval yourself.</p>
     <form id="task-form" class="card">
       <div class="grid">
         <label>Bike<select id="task-bike" required></select></label>

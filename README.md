@@ -30,9 +30,18 @@ and the two trade one JSON file back and forth.
   models grouped by family, e.g. Softail → Fat Boy) or by typing any
   make and model not listed. Update its odometer, add tasks. Common task
   names (Engine oil, Primary fluid, Spark plugs, …) are one-tap
-  buttons that fill in the name — **you set the interval from your
-  manual**. The Reference tab lists the factory intervals for the Evo
-  Softail as a starting point, but your manual wins for your bike.
+  buttons that fill in the name. **Factory auto-fill:** adding a
+  1984–1999 Evo Softail (Fat Boy, Heritage Classic, Standard) fills
+  the task list from the factory schedule in FSM #99482-98 — 16 jobs
+  (oil, primary, transmission, clutch, belt, brakes, tires, air
+  filter, battery, primary chain at 5,000 mi; fork oil, wheel
+  bearings, fuel filter, throttle cables at 10,000 mi; spark plugs
+  and steering head bearings at 20,000 mi), every one labeled with
+  its source in the task notes — and it never overwrites a task you
+  set yourself. Anything without a sourced schedule: **you set the
+  interval from your manual**. The Reference tab lists the same
+  factory intervals as a starting point, but your manual wins for
+  your bike.
 - **History tab** — every logged service, newest first, filterable by
   bike and task, with a running total of what you've spent.
 - **Data tab** — export the whole logbook as one JSON file, import a
@@ -126,13 +135,14 @@ the app the same way. Verified both directions — see TESTING.md.
 
 ## On specs
 
-The app's only service numbers are the ones in the Reference tab and
-the example logbook, and they come from one source: the 1997–98
-Softail Factory Service Manual #99482-98, §1 — not from memory. The
-example bike is a 1995 Fat Boy on the same Evo Softail platform, so
-the intervals and fluid types carry over, but year-specific capacities
-are not printed as 1995 specs. For any other bike, the numbers come
-from that bike's own manual — guessing them is how parts get broken.
+The app's only service numbers are the ones in the Reference tab,
+the example logbook, and the factory auto-fill, and they come from
+one source: the 1997–98 Softail Factory Service Manual #99482-98,
+§1 — not from memory. The example bike is a 1995 Fat Boy on the same
+Evo Softail platform, so the intervals and fluid types carry over,
+but year-specific capacities are not printed as 1995 specs. For any
+other bike, the numbers come from that bike's own manual — guessing
+them is how parts get broken.
 
 Brake fluid is the one to get right: **DOT 5 silicone ONLY, never mix
 with DOT 3/4** (§1, p.1-42; part nos. 99902-77 / 99901-77).
@@ -140,7 +150,7 @@ with DOT 3/4** (§1, p.1-42; part nos. 99902-77 / 99901-77).
 ## Tests
 
 ```bash
-node test.js   # core logic: 61 checks, no dependencies
+node test.js   # core logic: 80 checks, no dependencies
 ```
 
 The core logic (due math, odometer rules, import validation, sample

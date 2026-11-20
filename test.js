@@ -297,5 +297,81 @@ check('Yamaha includes MT-07 and YZF-R6',
   app.commonModels('Yamaha').some(function (e) { return e.model === 'MT-07'; }) &&
   app.commonModels('Yamaha').some(function (e) { return e.model === 'YZF-R6'; }));
 
+/* --- factory-schedule auto-fill --- */
+(function () {
+  var sched = app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 1995);
+  check('Fat Boy 1995 matches the Evo Softail schedule',
+    !!sched && sched.label === 'Evo Softail (1984–1999)');
+  check('schedule carries 16 tasks', !!sched && sched.tasks.length === 16);
+  var oil = sched.tasks.filter(function (t) { return t.name === 'Engine oil'; })[0];
+  check('Engine oil is 5,000 mi from FSM #99482-98',
+    !!oil && oil.every_miles === 5000 && oil.notes.indexOf('#99482-98') >= 0);
+  var fork = sched.tasks.filter(function (t) { return t.name === 'Fork oil'; })[0];
+  var plugs = sched.tasks.filter(function (t) { return t.name === 'Spark plugs'; })[0];
+  check('Fork oil 10,000 / Spark plugs 20,000',
+    fork.every_miles === 10000 && plugs.every_miles === 20000);
+  check('Heritage Classic 1997 matches',
+    !!app.factoryScheduleFor('Harley-Davidson', 'Heritage Classic', 1997));
+  check('Standard 1990 matches',
+    !!app.factoryScheduleFor('Harley-Davidson', 'Standard', 1990));
+  check('year bounds hold (1984 and 1999 in, 1983 and 2000 out)',
+    !!app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 1984) &&
+    !!app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 1999) &&
+    !app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 1983) &&
+    !app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 2000));
+  check('Fat Boy 2020 gets no schedule',
+    !app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', 2020));
+  check('no year means no schedule',
+    !app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', null) &&
+    !app.factoryScheduleFor('Harley-Davidson', 'Fat Boy', ''));
+  check('Triumph Tiger 900 gets no schedule',
+    !app.factoryScheduleFor('Triumph', 'Tiger 900', 1995));
+  check('model lookup ignores year (for the picker hint)',
+    !!app.factoryScheduleModel('Harley-Davidson', 'Fat Boy') &&
+    !app.factoryScheduleModel('Triumph', 'Tiger 900'));
+})();
+(function () {
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'My Fat Boy', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '20000' });
+  var bid = Object.keys(s.bikes)[0];
+  var res = app.applyFactorySchedule(s, bid);
+  check('auto-fill adds all 16 factory tasks',
+    res.added === 16 && res.skipped === 0 && Object.keys(s.tasks).length === 16);
+  var oilId = Object.keys(s.tasks).filter(function (id) { return s.tasks[id].name === 'Engine oil'; })[0];
+  check('filled tasks carry the source note',
+    s.tasks[oilId].notes.indexOf('FSM #99482-98') >= 0);
+  check('filled tasks count from the bike odometer',
+    s.tasks[oilId].baseline_odo === 20000);
+  var again = app.applyFactorySchedule(s, bid);
+  check('re-apply adds nothing, skips all 16',
+    again.added === 0 && again.skipped === 16);
+  app.validateImport(JSON.parse(JSON.stringify(s)));
+  check('auto-filled logbook still validates as CLI-shaped', true);
+})();
+(function () {
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'My Fat Boy', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '20000' });
+  var bid = Object.keys(s.bikes)[0];
+  app.addTask(s, { bike_id: bid, name: 'Engine oil', every_miles: '2500', every_months: '', notes: 'My own interval' });
+  var res = app.applyFactorySchedule(s, bid);
+  var oil = s.tasks[Object.keys(s.tasks).filter(function (id) { return s.tasks[id].name === 'Engine oil'; })[0]];
+  check('user-set task survives auto-fill untouched',
+    res.added === 15 && res.skipped === 1 &&
+    oil.every_miles === 2500 && oil.notes === 'My own interval');
+})();
+(function () {
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'New Fat Boy', year: '2020', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '5000' });
+  var bid = Object.keys(s.bikes)[0];
+  var res = app.applyFactorySchedule(s, bid);
+  check('out-of-range year fills nothing',
+    res.added === 0 && res.schedule === null && Object.keys(s.tasks).length === 0);
+})();
+(function () {
+  var s = app.sampleStore();
+  check('sample logbook still has exactly 4 tasks',
+    Object.keys(s.tasks).length === 4);
+})();
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

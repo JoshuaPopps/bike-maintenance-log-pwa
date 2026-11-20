@@ -1,10 +1,10 @@
-# Test notes — bike-maintenance-log-pwa v1.0.0
+# Test notes — bike-maintenance-log-pwa v1.2.0
 
-Tested 2026-11-04. No build step, no dependencies in the app itself.
+Tested 2026-11-04; v1.2.0 factory auto-fill tested 2026-11-20. No build step, no dependencies in the app itself.
 Test data was throwaway example data — nothing here is anyone's real
 bike or real mileage.
 
-## Core-logic tests — `node test.js` (46 passed, 0 failed)
+## Core-logic tests — `node test.js` (80 passed, 0 failed)
 
 Run from the app directory against Node 24:
 
@@ -159,3 +159,62 @@ page — the paragraph renders correctly ("Intervals come from your
 manual") and the live app.js byte-matches the pushed commit, so those
 two were reporting artifacts, not app bugs. No change made for them.
 - Service-worker cache bumped v2 → v3.
+
+## v1.2.0 — factory-schedule auto-fill (2026-11-20)
+
+Picking a bike from the common-bikes catalog now fills its task list
+from the factory schedule — where one is sourced. The schedule on
+file is the 1984–1999 Evo Softail platform from FSM #99482-98
+(1997–98), Service Intervals §1: first service at 500 mi, then
+every 5,000 mi (engine oil + filter, primary chaincase lubricant,
+transmission lubricant, clutch adjustment, drive belt, brake fluid
+level/condition, tires, air cleaner, battery, primary chain);
+10,000 mi (fork oil, wheel bearings, fuel tank filter, throttle
+cables); 20,000 mi (spark plugs, steering head bearings). Covered
+models: Fat Boy (FLSTF) and Heritage Classic (FLSTC), named in
+#99482-98 itself, plus Standard (FXST), the base model of the same
+platform, covered by the 1984–99 Softail Repair Manual's maintenance
+schedule — same 5,000 / 10,000 / 20,000 mi pattern, corroborated in
+the repair manual text (wheel bearings and spark plugs at 10,000 mi)
+and in the FSM text (oil and primary at 500 mi and every 5,000 mi).
+Every filled-in task carries its source in its notes
+("Factory schedule — FSM #99482-98: …"), visible in the task rows.
+These are the same FSM §1 numbers the Reference tab already shows;
+auto-fill turns that reference into tasks.
+
+Rules the implementation holds to:
+
+- Year-gated: the schedule applies only when the bike's year is
+  1984–1999. A 2020 Fat Boy gets nothing — same name, different
+  bike, no sourced schedule. No year, no fill.
+- Never overwrites: auto-fill adds only tasks the bike does not
+  already have (name match, case-insensitive). A task the user set
+  keeps its own interval and notes; re-running adds nothing.
+- Nothing invented: models with no entry in FACTORY_SCHEDULES get
+  no auto-fill. Springer-only items (rocker bearings, steering-head
+  grease at every interval) and dealer-inspection-only lines (engine
+  mounts, fasteners, road test) are deliberately left out — the
+  filled list is the owner-serviceable jobs.
+- Data model untouched: auto-filled tasks are plain tasks with a
+  source note, so the JSON still trades with the CLI both ways
+  (validated in the node suite).
+
+- Node tests grew from 61 to 80: schedule lookup (Fat Boy /
+  Heritage Classic / Standard in range; 2020, missing year, and
+  Triumph out), year bounds (1984 and 1999 in, 1983 and 2000 out),
+  full 16-task fill with source notes and bike-odometer baselines,
+  re-apply adds nothing, user-set task survives untouched,
+  out-of-range year fills nothing, sample logbook still exactly 4
+  tasks, and the auto-filled logbook still validates as CLI-shaped.
+- Real-browser check (Playwright): pick Harley-Davidson → Fat Boy →
+  the hint reads "Factory schedule on file: Evo Softail (1984–1999)"
+  → enter year 1995, save → 16 tasks appear, each showing its
+  "Factory schedule — FSM #99482-98" note. Picking a Triumph shows
+  "No factory schedule on file for this model".
+- Service-worker cache bumped v7 → v8.
+- Note: local staging was behind live when this landed (live had
+  since shipped the 1990 Treatment restyle, the Reference tab, and
+  the FSM-based sample logbook). The live files were pulled down
+  first and this feature was re-applied on top of them, so nothing
+  live was overwritten; the sync record's newest entry before this
+  push was 126242b, live head 5be1f15.
