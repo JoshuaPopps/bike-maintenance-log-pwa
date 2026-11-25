@@ -11,7 +11,8 @@
  *
  * Spec rule: the app ships factory service schedules ONLY where they
  * are sourced from a published manual — right now, the 1984–1999 Evo
- * Softail schedule from FSM #99482-98 (see FACTORY_SCHEDULES; every
+ * Softail schedule from FSM #99482-98 and the 1986–2003 Sportster
+ * schedule from FSM #99484-98 (see FACTORY_SCHEDULES; every
  * filled-in task names its source). Models without a sourced schedule
  * get no auto-fill at all, and the example logbook's intervals are
  * placeholders, clearly labelled as such, never presented as factory
@@ -39,7 +40,7 @@ var QUICK_TASKS = [
  * text entry in the form. */
 var COMMON_BIKES = [
   { brand: 'Harley-Davidson', families: [
-    { family: 'Sportster', models: ['Iron 883', 'Forty-Eight', 'Roadster', 'SuperLow', 'Custom 1200', 'Nightster', 'Sportster S'] },
+    { family: 'Sportster', models: ['883', '883 Custom', '883 Deluxe', '883 Hugger', '1100', '1200', '1200 Custom', '1200 Sport', 'Iron 883', 'Forty-Eight', 'Roadster', 'SuperLow', 'Custom 1200', 'Nightster', 'Sportster S'] },
     { family: 'Softail', models: ['Standard', 'Street Bob', 'Fat Bob', 'Fat Boy', 'Heritage Classic', 'Low Rider S', 'Low Rider ST', 'Breakout'] },
     { family: 'Dyna', models: ['Street Bob', 'Low Rider', 'Wide Glide', 'Super Glide', 'Fat Bob'] },
     { family: 'Touring', models: ['Street Glide', 'Road Glide', 'Road King', 'Electra Glide Classic', 'Ultra Limited'] },
@@ -110,7 +111,8 @@ function commonModels(brand) {
  *
  * Scope is deliberately narrow: the manuals on the shelf cover the
  * 1984–1999 Evo Softails (FLSTC, FLSTF, FLSTS, FXSTC, FXSTS,
- * FXSTSB, FXST). Of the picker's Softail names, Fat Boy (FLSTF) and
+ * FXSTSB, FXST) and the 1986–2003 Sportsters (XL/XLH 883, 1100,
+ * 1200). Of the picker's Softail names, Fat Boy (FLSTF) and
  * Heritage Classic (FLSTC) are named in #99482-98 itself; Standard
  * (FXST) is the base model of the same platform, covered by the
  * 1984–99 Softail Repair Manual's maintenance schedule (Table 2) —
@@ -122,6 +124,24 @@ function commonModels(brand) {
  * manual's table (engine mounts, fasteners, road test, …) are left
  * out on purpose — auto-fill is the owner-serviceable jobs; anything
  * else the user adds by hand.
+ *
+ * The Sportster entry comes from the factory 1998 XLH Service
+ * Manual #99484-98 §1, "Regular Maintenance Intervals — XLH
+ * Sportster Models" (p.1-2), corroborated line-for-line by the
+ * 1986–2003 Sportster Service Manual (Clymer) Ch. 3, Table 1,
+ * which is what carries the 1986–2003 year range — the factory
+ * manual itself is the 1998 book. Where the Sportster table and
+ * the Softail table disagree, the Sportster task's note says so in
+ * plain words ("SPORTSTER value … the Softail schedule says …"),
+ * so a Sportster number is never mistaken for a Softail one. The
+ * Sportster first service is 500 mi in the factory table (Clymer
+ * says an initial 1,000 mi — noted, not resolved here; the
+ * repeating interval is what the clock uses). Four rows carry the
+ * factory footnote "*Also perform prior to storage or annually"
+ * (engine oil, brake fluid, wheel bearings, rear fork bearings):
+ * the schedule stays miles-only like the Softail one — the manual
+ * gives no months leg for these jobs as a schedule — and the
+ * footnote is printed in the task note instead.
  *
  * Every task's `notes` names its source, so the filled-in list shows
  * where each interval came from in the UI. A model with no entry
@@ -151,6 +171,34 @@ var FACTORY_SCHEDULES = [
       { name: 'Throttle cables', every_miles: 10000, notes: 'Factory schedule — FSM #99482-98: lubricate every 10,000 mi.' },
       { name: 'Spark plugs', every_miles: 20000, notes: 'Factory schedule — FSM #99482-98: replace every 20,000 mi (inspect at 10,000).' },
       { name: 'Steering head bearings', every_miles: 20000, notes: 'Factory schedule — FSM #99482-98: remove, inspect, repack every 20,000 mi.' }
+    ]
+  },
+  {
+    make: 'Harley-Davidson',
+    models: ['883', '883 Custom', '883 Deluxe', '883 Hugger', '1100', '1200', '1200 Custom', '1200 Sport'],
+    years: [1986, 2003],
+    label: 'Sportster XL/XLH (1986–2003)',
+    shortSource: 'FSM #99484-98',
+    source: 'Harley-Davidson Sportster FSM #99484-98 (1998), Regular Maintenance Intervals §1 (p.1-2); corroborated by the 1986–2003 Sportster Service Manual (Clymer) Ch. 3, Table 1',
+    tasks: [
+      { name: 'Engine oil', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: replace engine oil + filter every 5,000 mi (first service 500 mi). *Also perform prior to storage or annually.' },
+      { name: 'Primary / transmission fluid', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: replace primary chaincase/transmission lubricant every 5,000 mi (first service 500 mi). A Sportster runs one shared sump — this is ONE job, not the Softail\'s two separate fluids.' },
+      { name: 'Primary chain', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect primary chain every 5,000 mi (Clymer Table 1: inspect + check tension, every 5,000 mi).' },
+      { name: 'Clutch adjustment', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: adjust every 5,000 mi (first service 500 mi).' },
+      { name: 'Drive belt', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect every 5,000 mi (first inspect 2,500 mi; adjust at the 500-mi first service).' },
+      { name: 'Brake fluid', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect level/condition every 5,000 mi (first 2,500 mi; DOT 5 only). *Also perform prior to storage or annually.' },
+      { name: 'Tires', every_miles: 2500, notes: 'Factory schedule — SPORTSTER value: FSM #99484-98 §1: inspect tire pressure and wear/damage every 2,500 mi (and pre-ride). The Softail schedule says 5,000 mi — do not use the Softail number on a Sportster. Replace on condition/wear, not on mileage.' },
+      { name: 'Air filter', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect air cleaner every 5,000 mi (first 2,500 mi; Clymer Table 1: inspect and clean, every 5,000 mi).' },
+      { name: 'Battery', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: tighten battery connections every 5,000 mi. Clymer Table 1: check fluid level every 2,500 mi.' },
+      { name: 'Fork oil', every_miles: 10000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: replace front fork oil every 10,000 mi.' },
+      { name: 'Wheel bearings', every_miles: 10000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect/lubricate wheel bearings every 10,000 mi. *Also perform prior to storage or annually.' },
+      { name: 'Fuel tank filter screen', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect fuel tank filter screen every 5,000 mi. This is a screen inspection, NOT the Softail\'s 10,000-mi filter replacement.' },
+      { name: 'Throttle cables', every_miles: 5000, notes: 'Factory schedule — SPORTSTER value: FSM #99484-98 §1: lubricate throttle/clutch cables and throttle control sleeve every 5,000 mi. The Softail schedule says 10,000 mi — do not use the Softail number on a Sportster.' },
+      { name: 'Spark plugs', every_miles: 10000, notes: 'Factory schedule — SPORTSTER value: FSM #99484-98 §1: inspect at 5,000 mi, replace every 10,000 mi. The Softail schedule says replace at 20,000 mi — do not use the Softail number on a Sportster.' },
+      { name: 'Steering head bearing adjustment', every_miles: 5000, notes: 'Factory schedule — SPORTSTER value: FSM #99484-98 §1: front fork bearing adjustment — inspect at 2,500 mi, inspect/lubricate every 5,000 mi. NOT the Softail 20,000-mi remove/inspect/repack.' },
+      { name: 'Brake pads', every_miles: 2500, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect brake pad linings and discs for wear every 2,500 mi (Clymer Table 1 agrees). Minimum pad thickness 0.062 in. (Clymer Table 7). Replace on wear, not on mileage.' },
+      { name: 'Rear fork bearings', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect at 2,500 mi, inspect/lubricate rear fork (swing arm) bearings every 5,000 mi. *Also perform prior to storage or annually.' },
+      { name: 'Jiffy stand', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: lubricate jiffy stand every 5,000 mi.' }
     ]
   }
 ];
@@ -241,6 +289,12 @@ function loadStore() {
     data.entries = Array.isArray(data.entries) ? data.entries : [];
     /* Logbooks saved before expenses existed have no key at all. */
     data.expenses = Array.isArray(data.expenses) ? data.expenses : [];
+    /* Expenses saved before receipt photos existed have no `photo`
+     * key — that means "no photo", never an error. */
+    data.expenses.forEach(function (x) {
+      if (!x || typeof x !== 'object') return;
+      if (!('photo' in x)) x.photo = null;
+    });
     return data;
   } catch (e) {
     return emptyStore();
@@ -539,6 +593,118 @@ function dueReminders(store, bikeId, asOf) {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Wear clocks — one clock per wear component, Loam-style. Each       */
+/* component's clock IS its task's due state (taskStatus): the miles  */
+/* and time legs, the last logged service, the due-soon/overdue      */
+/* badge. The registry below is the only new data — component name,  */
+/* which task names count as that component on each platform, and    */
+/* what the clock means. Intervals are NEVER stored here: they come  */
+/* from the bike's own task (set by the factory auto-fill, which     */
+/* cites its manual) or, for a bike with no such task yet, from its  */
+/* factory schedule. A component with no published interval anywhere */
+/* gets NO clock: drive chain (both factory tables are belt-drive),  */
+/* tire replacement (both manuals: replace on condition/wear, not    */
+/* on mileage — the Tires clock is the inspect interval), coolant    */
+/* (air-cooled Harleys have no cooling system), and brake-pad        */
+/* replacement (inspect interval only — replace on wear).            */
+/*                                                                    */
+/* Status values: 'ok' / 'due-soon' / 'overdue' (tracked, from the  */
+/* task), 'not-tracked' (published interval exists for this bike     */
+/* but no task yet — add it to start the clock), 'no-interval'       */
+/* (no published interval on file for this bike at all — the clock   */
+/* needs the user's manual).                                          */
+/* ------------------------------------------------------------------ */
+var WEAR_COMPONENTS = [
+  { component: 'Engine oil', tasks: ['Engine oil'],
+    about: 'Oil + filter — the wear item the whole schedule hangs on.' },
+  { component: 'Primary + transmission fluid', tasks: ['Primary fluid', 'Transmission fluid', 'Primary / transmission fluid'],
+    about: 'One clock per fluid on a Softail; one shared sump — one job — on a Sportster.' },
+  { component: 'Spark plugs', tasks: ['Spark plugs'],
+    about: 'Replace on the book interval — 20,000 mi Softail, 10,000 mi Sportster.' },
+  { component: 'Drive belt', tasks: ['Drive belt'],
+    about: 'Inspect on the book interval; adjust at the first service.' },
+  { component: 'Brake fluid', tasks: ['Brake fluid'],
+    about: 'Inspect level/condition — DOT 5 silicone only, never mix with DOT 3/4.' },
+  { component: 'Brake pads', tasks: ['Brake pads'],
+    about: 'Inspect interval only — replace when worn to minimum thickness, not on mileage.' },
+  { component: 'Tires', tasks: ['Tires'],
+    about: 'Inspect interval only — pressure and wear every check; replace on condition, not mileage.' },
+  { component: 'Fork oil', tasks: ['Fork oil'],
+    about: 'Replace on the book interval.' },
+  { component: 'Wheel bearings', tasks: ['Wheel bearings'],
+    about: 'Remove, inspect, repack/lubricate on the book interval.' },
+  { component: 'Air filter', tasks: ['Air filter'],
+    about: 'Inspect (and clean) on the book interval.' },
+  { component: 'Clutch adjustment', tasks: ['Clutch adjustment'],
+    about: 'Check/adjust on the book interval.' },
+  { component: 'Primary chain', tasks: ['Primary chain'],
+    about: 'Inspect/adjust on the book interval.' },
+  { component: 'Battery', tasks: ['Battery'],
+    about: 'Inspect connections (and fluid, where the manual calls for it) on the book interval.' },
+  { component: 'Steering head bearings', tasks: ['Steering head bearings', 'Steering head bearing adjustment'],
+    about: 'Repack on the Softail book, adjust/lubricate on the Sportster book — different jobs, different intervals.' },
+  { component: 'Fuel filter', tasks: ['Fuel tank filter', 'Fuel tank filter screen'],
+    about: 'Replace on the Softail book, inspect the screen on the Sportster book — different jobs.' },
+  { component: 'Throttle cables', tasks: ['Throttle cables'],
+    about: 'Lubricate on the book interval — 10,000 mi Softail, 5,000 mi Sportster.' }
+];
+
+/* One wear clock per registry component for one bike. Read-only: it
+ * never adds or changes a task. */
+function wearClocks(store, bikeId, asOf) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Bike not found.');
+  asOf = asOf || todayISO();
+  var sched = factoryScheduleFor(b.make, b.model, b.year);
+  return WEAR_COMPONENTS.map(function (entry) {
+    var taskId = null;
+    Object.keys(store.tasks).some(function (tid) {
+      var t = store.tasks[tid];
+      if (t.bike_id !== bikeId) return false;
+      return entry.tasks.some(function (name) {
+        return t.name.toLowerCase() === name.toLowerCase();
+      }) ? (taskId = tid, true) : false;
+    });
+    if (taskId) {
+      var t = store.tasks[taskId];
+      var st = taskStatus(store, bikeId, taskId, asOf);
+      return {
+        component: entry.component, about: entry.about,
+        tracked: true, taskId: taskId, taskName: t.name,
+        status: st.status, interval: intervalLabel(t),
+        source: t.notes || '', details: st.details
+      };
+    }
+    /* No task yet: the published interval, if the bike's factory
+     * schedule has one for this component. */
+    var schedTask = null;
+    if (sched) {
+      sched.tasks.some(function (st) {
+        return entry.tasks.some(function (name) {
+          return st.name.toLowerCase() === name.toLowerCase();
+        }) ? (schedTask = st, true) : false;
+      });
+    }
+    if (schedTask) {
+      return {
+        component: entry.component, about: entry.about,
+        tracked: false, taskId: null, taskName: schedTask.name,
+        status: 'not-tracked',
+        interval: 'every ' + Number(schedTask.every_miles).toLocaleString('en-US') + ' mi',
+        source: schedTask.notes,
+        details: ['No task yet — add "' + schedTask.name + '" to start this clock.']
+      };
+    }
+    return {
+      component: entry.component, about: entry.about,
+      tracked: false, taskId: null, taskName: null,
+      status: 'no-interval', interval: '', source: '',
+      details: ['No published interval on file for this bike — add the task from your manual.']
+    };
+  });
+}
+
 /* Per-bike service history export (JSON shape). Completed service
  * records for ONE bike only — its tasks and its entries, newest
  * first, with the total spent. Plain data, no store internals, so
@@ -595,7 +761,10 @@ function bikeHistoryExport(store, bikeId) {
         description: x.description,
         odometer: x.odometer == null ? null : x.odometer,
         cost: x.cost == null ? null : x.cost,
-        notes: x.notes || ''
+        notes: x.notes || '',
+        /* The photo itself stays in the full logbook backup, not in
+         * this per-bike report — the flag says one is attached. */
+        has_photo: !!x.photo
       };
     })
   };
@@ -644,7 +813,8 @@ function bikeHistoryText(store, bikeId) {
     data.expenses.forEach(function (x) {
       lines.push(fmtDate(x.date) + ' — ' + expenseCategoryLabel(x.category) + ' — ' + x.description +
         (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') +
-        ' — ' + fmtMoney(x.cost));
+        ' — ' + fmtMoney(x.cost) +
+        (x.has_photo ? ' (receipt photo attached)' : ''));
       if (x.notes) lines.push('    ' + x.notes);
     });
     lines.push('Grand total (services + expenses): ' + fmtMoney(data.grand_total));
@@ -753,6 +923,12 @@ function addExpense(store, fields) {
   var odo = fields.odometer === '' || fields.odometer == null
     ? null : Number(fields.odometer);
   if (odo != null && (isNaN(odo) || odo < 0)) throw new Error('Odometer must be zero or more.');
+  var photo = null;
+  if (fields.photo != null) {
+    if (!isExpensePhoto(fields.photo))
+      throw new Error('That receipt photo is not a usable image (must be an image under ~1 MB).');
+    photo = { name: fields.photo.name || 'receipt', type: fields.photo.type || '', dataUrl: fields.photo.dataUrl };
+  }
   var expense = {
     id: nextExpenseId(store.expenses || []),
     bike_id: fields.bike_id,
@@ -761,7 +937,8 @@ function addExpense(store, fields) {
     description: description,
     cost: Math.round(cost * 100) / 100,
     odometer: odo,
-    notes: fields.notes || ''
+    notes: fields.notes || '',
+    photo: photo
   };
   store.expenses.push(expense);
   return expense;
@@ -771,6 +948,42 @@ function removeExpense(store, expenseId) {
   var found = (store.expenses || []).some(function (x) { return x.id === expenseId; });
   if (!found) throw new Error('Expense not found.');
   store.expenses = store.expenses.filter(function (x) { return x.id !== expenseId; });
+}
+
+/* Receipt photos — attach-only, no OCR (the vision box is down).
+ * A photo is { name, type, dataUrl } stored on the expense itself,
+ * in the same localStorage JSON as the rest of the logbook, so it
+ * rides along in the backup and the CLI-shaped import. The UI
+ * downscales to a phone-photo thumbnail before calling attach, but
+ * the cap is enforced here too: a data URL over ~1.1 MB is refused
+ * rather than risking a blown localStorage quota mid-save. Old
+ * expenses have no `photo` key at all — that means "no photo",
+ * never an error. */
+var MAX_PHOTO_CHARS = 1500000;
+
+function isExpensePhoto(photo) {
+  return !!photo && typeof photo === 'object' &&
+    typeof photo.dataUrl === 'string' &&
+    photo.dataUrl.indexOf('data:image/') === 0 &&
+    photo.dataUrl.length <= MAX_PHOTO_CHARS;
+}
+
+function attachExpensePhoto(store, expenseId, photo) {
+  var x = (store.expenses || []).filter(function (e) { return e.id === expenseId; })[0];
+  if (!x) throw new Error('Expense not found.');
+  if (!isExpensePhoto(photo))
+    throw new Error('That receipt photo is not a usable image (must be an image under ~1 MB).');
+  x.photo = { name: photo.name || 'receipt', type: photo.type || '', dataUrl: photo.dataUrl };
+  return x;
+}
+
+/* True when a photo was removed, false when there was none to remove. */
+function removeExpensePhoto(store, expenseId) {
+  var x = (store.expenses || []).filter(function (e) { return e.id === expenseId; })[0];
+  if (!x) throw new Error('Expense not found.');
+  if (!x.photo) return false;
+  x.photo = null;
+  return true;
 }
 
 /* Expenses for one bike (or all bikes when bikeId is null),
@@ -832,7 +1045,10 @@ function bikeExpensesExport(store, bikeId) {
         description: x.description,
         odometer: x.odometer == null ? null : x.odometer,
         cost: x.cost == null ? null : x.cost,
-        notes: x.notes || ''
+        notes: x.notes || '',
+        /* The photo itself stays in the full logbook backup, not in
+         * this per-bike report — the flag says one is attached. */
+        has_photo: !!x.photo
       };
     })
   };
@@ -863,7 +1079,8 @@ function bikeExpensesText(store, bikeId) {
     data.expenses.forEach(function (x) {
       lines.push(fmtDate(x.date) + ' — ' + expenseCategoryLabel(x.category) + ' — ' + x.description +
         (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') +
-        ' — ' + fmtMoney(x.cost));
+        ' — ' + fmtMoney(x.cost) +
+        (x.has_photo ? ' (receipt photo attached)' : ''));
       if (x.notes) lines.push('    ' + x.notes);
     });
   }
@@ -918,6 +1135,10 @@ function validateImport(data) {
       throw new Error('Expense #' + (i + 1) + ' has an unknown category.');
     if (x.cost != null && (isNaN(Number(x.cost)) || Number(x.cost) < 0))
       throw new Error('Expense #' + (i + 1) + ' has a bad cost.');
+    /* A receipt photo is optional; when present it must be a usable
+     * image, and a missing key is an old expense, not an error. */
+    if (x.photo != null && !isExpensePhoto(x.photo))
+      throw new Error('Expense #' + (i + 1) + ' has a bad receipt photo.');
   });
   return { bikes: data.bikes, tasks: data.tasks, entries: data.entries, expenses: expenses };
 }
@@ -1000,18 +1221,23 @@ function mergeSample(store, sample) {
 }
 /* ------------------------------------------------------------------ */
 /* Pocket Garage handoff (receiving side) — see HANDOFF-FORMAT.md.    */
-/* This app accepts kind "diagnosis-to-task" only, delivered as a     */
-/* ?handoff=<base64url(JSON)> URL parameter (or pasted JSON on the    */
-/* Data tab). The payload is validated, the bike is resolved by       */
-/* roster key first / name match second, and NOTHING is written until */
-/* the user confirms on the card. A diagnosis carries no service      */
-/* interval, so a new task asks the user for one — it is never        */
-/* invented. If the task already exists, no duplicate is made: the    */
-/* confirm pre-fills the log-service form for it instead.             */
+/* This app accepts kinds "diagnosis-to-task" and "timing-to-task",   */
+/* delivered as a ?handoff=<base64url(JSON)> URL parameter (or pasted */
+/* JSON on the Data tab). The payload is validated, the bike is       */
+/* resolved by roster key first / name match second, and NOTHING is   */
+/* written until the user confirms on the card. A diagnosis carries   */
+/* no service interval, so a new task asks the user for one — it is   */
+/* never invented. A timing job carries the factory 5,000-mile check  */
+/* interval as a cited suggestion, pre-filled and editable. If the    */
+/* task already exists, no duplicate is made: the confirm pre-fills   */
+/* the log-service form for it instead.                               */
 /* ------------------------------------------------------------------ */
 var HANDOFF_FORMAT = 'pocket-garage-handoff';
 var HANDOFF_VERSION = 1;
-var HANDOFF_KIND = 'diagnosis-to-task';
+var HANDOFF_KIND_DIAGNOSIS = 'diagnosis-to-task';
+var HANDOFF_KIND_TIMING = 'timing-to-task';
+var HANDOFF_KIND = HANDOFF_KIND_DIAGNOSIS; /* the original kind */
+var HANDOFF_KINDS = [HANDOFF_KIND_DIAGNOSIS, HANDOFF_KIND_TIMING];
 var HANDOFF_MAX_CHARS = 8000;
 
 function b64urlEncode(str) {
@@ -1033,32 +1259,84 @@ function encodePocketHandoff(obj) {
 }
 function handoffIsNonEmptyString(v) { return typeof v === 'string' && v.trim().length > 0; }
 
-function validatePocketHandoff(obj) {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('That link is not a Pocket Garage handoff.');
-  if (obj.format !== HANDOFF_FORMAT) throw new Error('That link is not a Pocket Garage handoff (wrong format).');
-  if (obj.version !== HANDOFF_VERSION) throw new Error('That handoff is version ' + obj.version + ' — this app only takes version ' + HANDOFF_VERSION + '.');
-  if (obj.kind !== HANDOFF_KIND) throw new Error('This app takes diagnosis handoffs, not "' + obj.kind + '".');
-  if (!handoffIsNonEmptyString(obj.sentAt) || isNaN(Date.parse(obj.sentAt))) throw new Error('That handoff has no usable sent date.');
-  if (!handoffIsNonEmptyString(obj.from)) throw new Error('That handoff does not say which app sent it.');
-  if (!obj.bike || !handoffIsNonEmptyString(obj.bike.rosterKey)) throw new Error('That handoff does not say which bike it is for.');
-  if (!handoffIsNonEmptyString(obj.bike.name)) throw new Error('That handoff has no bike name.');
-  var p = obj.payload;
-  if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('That handoff has no diagnosis in it.');
+function validateTimingPayload(p) {
+  if (!p.timing || typeof p.timing !== 'object' || Array.isArray(p.timing)) {
+    throw new Error('That handoff has no timing job in it.');
+  }
+  var t = p.timing;
+  if (typeof t.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(t.date)) {
+    throw new Error('That timing job has no usable date (YYYY-MM-DD).');
+  }
+  if (t.ignition !== 'stock' && t.ignition !== 'dyna-2000i') {
+    throw new Error('That timing job names an unknown ignition: ' + t.ignition + '.');
+  }
+  if (t.method !== 'static' && t.method !== 'dynamic' && t.method !== 'check') {
+    throw new Error('That timing job names an unknown method: ' + t.method + '.');
+  }
+  var curve = (t.curve === undefined || t.curve === null) ? null : t.curve;
+  if (curve !== null && (curve !== 1 && curve !== 2 && curve !== 3 && curve !== 4)) {
+    throw new Error('Dyna curve in a log entry must be 1–4.');
+  }
+  if (curve !== null && t.ignition !== 'dyna-2000i') {
+    throw new Error('That timing job has a Dyna curve on a stock ignition.');
+  }
+  var finalAdvance = (t.finalAdvanceDeg === undefined || t.finalAdvanceDeg === null)
+    ? null : t.finalAdvanceDeg;
+  if (finalAdvance !== null && (typeof finalAdvance !== 'number' || isNaN(finalAdvance))) {
+    throw new Error('That timing job has a bad final advance figure.');
+  }
+  if (typeof t.result !== 'string') throw new Error('That handoff is missing "result".');
+  if (typeof t.notes !== 'string') throw new Error('That handoff is missing "notes".');
+  if (!handoffIsNonEmptyString(t.source)) throw new Error('That handoff is missing "source".');
+  if (!handoffIsNonEmptyString(p.suggestedTaskName)) throw new Error('That handoff is missing "suggestedTaskName".');
+  if (p.suggestedTaskName.trim().length > 80) throw new Error('That handoff\'s suggested task name is too long (max 80 characters).');
+  if (typeof p.suggestedIntervalMiles !== 'number' || !(p.suggestedIntervalMiles > 0) ||
+      Math.floor(p.suggestedIntervalMiles) !== p.suggestedIntervalMiles) {
+    throw new Error('That handoff has no usable suggested interval in miles.');
+  }
+  if (!handoffIsNonEmptyString(p.intervalSource)) throw new Error('That handoff is missing "intervalSource".');
+  return {
+    timing: {
+      date: t.date, ignition: t.ignition, method: t.method, curve: curve,
+      finalAdvanceDeg: finalAdvance, result: t.result, notes: t.notes, source: t.source
+    },
+    suggestedTaskName: p.suggestedTaskName.trim(),
+    suggestedIntervalMiles: p.suggestedIntervalMiles,
+    intervalSource: p.intervalSource
+  };
+}
+
+function validateDiagnosisPayload(p) {
   ['treeId', 'treeTitle', 'topCause', 'cause', 'test', 'fix', 'urgency', 'safeToRide', 'suggestedTaskName'].forEach(function (k) {
     if (!handoffIsNonEmptyString(p[k])) throw new Error('That handoff is missing "' + k + '".');
   });
   if (['low', 'medium', 'high', 'critical'].indexOf(p.urgency) === -1) throw new Error('That handoff has an unknown urgency: ' + p.urgency + '.');
   if (p.suggestedTaskName.trim().length > 80) throw new Error('That handoff\'s suggested task name is too long (max 80 characters).');
   return {
+    treeId: p.treeId, treeTitle: p.treeTitle, topCause: p.topCause,
+    cause: p.cause, test: p.test, fix: p.fix, urgency: p.urgency,
+    safeToRide: p.safeToRide,
+    suggestedTaskName: p.suggestedTaskName.trim()
+  };
+}
+
+function validatePocketHandoff(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('That link is not a Pocket Garage handoff.');
+  if (obj.format !== HANDOFF_FORMAT) throw new Error('That link is not a Pocket Garage handoff (wrong format).');
+  if (obj.version !== HANDOFF_VERSION) throw new Error('That handoff is version ' + obj.version + ' — this app only takes version ' + HANDOFF_VERSION + '.');
+  if (HANDOFF_KINDS.indexOf(obj.kind) === -1) throw new Error('This app takes diagnosis and timing handoffs, not "' + obj.kind + '".');
+  if (!handoffIsNonEmptyString(obj.sentAt) || isNaN(Date.parse(obj.sentAt))) throw new Error('That handoff has no usable sent date.');
+  if (!handoffIsNonEmptyString(obj.from)) throw new Error('That handoff does not say which app sent it.');
+  if (!obj.bike || !handoffIsNonEmptyString(obj.bike.rosterKey)) throw new Error('That handoff does not say which bike it is for.');
+  if (!handoffIsNonEmptyString(obj.bike.name)) throw new Error('That handoff has no bike name.');
+  var p = obj.payload;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('That handoff has no payload in it.');
+  var payload = obj.kind === HANDOFF_KIND_TIMING ? validateTimingPayload(p) : validateDiagnosisPayload(p);
+  return {
     format: obj.format, version: obj.version, kind: obj.kind,
     sentAt: obj.sentAt, from: obj.from,
     bike: { rosterKey: obj.bike.rosterKey.trim(), name: obj.bike.name.trim() },
-    payload: {
-      treeId: p.treeId, treeTitle: p.treeTitle, topCause: p.topCause,
-      cause: p.cause, test: p.test, fix: p.fix, urgency: p.urgency,
-      safeToRide: p.safeToRide,
-      suggestedTaskName: p.suggestedTaskName.trim()
-    }
+    payload: payload
   };
 }
 
@@ -1115,9 +1393,21 @@ function pinPocketRosterKey(store, rosterKey, bikeId) {
 }
 
 /* The citation written into a task's notes (and into the log-service
- * notes when the fix is logged). Verbatim from the diagnosis. */
+ * notes when the fix is logged). Verbatim from the diagnosis, or
+ * from the timing job for a timing handoff. */
 function handoffCitation(handoff) {
   var p = handoff.payload;
+  if (handoff.kind === HANDOFF_KIND_TIMING) {
+    var t = p.timing;
+    var out = 'From the Ignition Timing Helper, ' + t.date + ': ' + t.ignition + ', ' + t.method;
+    if (t.curve !== null && t.curve !== undefined) out += ', curve ' + t.curve;
+    if (t.finalAdvanceDeg !== null && t.finalAdvanceDeg !== undefined) out += ', ' + t.finalAdvanceDeg + '° final advance';
+    out += '.';
+    if (t.result) out += ' Result: ' + t.result + '.';
+    if (t.notes) out += ' Notes: ' + t.notes + '.';
+    out += ' Source: ' + t.source + '.';
+    return out;
+  }
   var date = '';
   try { date = new Date(handoff.sentAt).toISOString().slice(0, 10); } catch (e) { date = handoff.sentAt; }
   return 'From the Evo Diagnostic, ' + date + ': ' + p.treeTitle + ' — ' + p.topCause +
@@ -1153,6 +1443,48 @@ if (typeof document !== 'undefined') {
   /* A validated handoff waiting on the user's confirm. In memory
    * only — never persisted, never applied without a tap. */
   var pendingHandoff = null;
+  /* A receipt photo picked on the expense form, waiting for the
+   * form to be submitted. In memory only until the expense saves. */
+  var pendingExpensePhoto = null;
+
+  /* Downscale a picked image to a phone-friendly receipt thumbnail
+   * (longest side 1200px, JPEG) so the data URL stays small enough
+   * for localStorage; retry smaller if it is still over the cap.
+   * Calls done(err, photo|null) — photo is { name, type, dataUrl }.
+   * Browser-only (FileReader + canvas); the cap itself is enforced
+   * in the pure attachExpensePhoto, which is what gets tested. */
+  function downscaleReceipt(file, done) {
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+      done(new Error('Pick an image file for the receipt photo.'));
+      return;
+    }
+    function attempt(maxSide, quality, next) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var dataUrl = canvas.toDataURL('image/jpeg', quality);
+          if (dataUrl.length > MAX_PHOTO_CHARS && next) { next(); return; }
+          if (dataUrl.length > MAX_PHOTO_CHARS) {
+            done(new Error('That photo is still too big after shrinking — try a closer crop.'));
+            return;
+          }
+          done(null, { name: file.name || 'receipt', type: 'image/jpeg', dataUrl: dataUrl });
+        };
+        img.onerror = function () { done(new Error('Could not read that image.')); };
+        img.src = reader.result;
+      };
+      reader.onerror = function () { done(new Error('Could not read that file.')); };
+      reader.readAsDataURL(file);
+    }
+    attempt(1200, 0.82, function () { attempt(800, 0.70, null); });
+  }
 
   function toast(msg, isError) {
     var el = document.getElementById('toast');
@@ -1172,6 +1504,8 @@ if (typeof document !== 'undefined') {
   function statusBadge(status) {
     if (status === 'overdue') return '<span class="badge overdue">OVERDUE</span>';
     if (status === 'due-soon') return '<span class="badge soon">DUE SOON</span>';
+    if (status === 'not-tracked') return '<span class="badge idle">NOT TRACKED</span>';
+    if (status === 'no-interval') return '<span class="badge idle">NO INTERVAL</span>';
     return '<span class="badge ok">ok</span>';
   }
 
@@ -1313,6 +1647,49 @@ if (typeof document !== 'undefined') {
     wireLogButtons(box);
   }
 
+  /* Wear clocks — one clock per wear component for the bike(s) the
+   * Due tab is filtered to. Tracked clocks show the live due state
+   * from the logged services; not-tracked ones show the published
+   * interval and how to start the clock. */
+  function renderWearClocks() {
+    var box = document.getElementById('wear-clocks');
+    if (!box) return;
+    if (!Object.keys(store.bikes).length) { box.innerHTML = ''; return; }
+    var picked = document.getElementById('due-bike').value || null;
+    var bikeIds = picked ? [picked]
+      : Object.keys(store.bikes).sort(function (a, b) {
+          return store.bikes[a].name.localeCompare(store.bikes[b].name);
+        });
+    var html = '';
+    bikeIds.forEach(function (bid) {
+      if (!store.bikes[bid]) return;
+      var b = store.bikes[bid];
+      var clocks = wearClocks(store, bid, todayISO());
+      html += '<div class="card"><h4>Wear clocks — ' + esc(b.name) + '</h4>' +
+        '<p class="muted">One clock per wear part, from the factory interval in your manual. ' +
+        'A clock runs off the services you logged; add the task to start one that is not tracked yet.</p>';
+      clocks.forEach(function (c) {
+        html += '<div class="taskrow">' + statusBadge(c.status) + ' <b>' + esc(c.component) + '</b>' +
+          (c.interval ? ' <span class="muted">(' + esc(c.interval) + ')</span>' : '');
+        if (c.tracked) {
+          html += ' <button class="mini secondary" data-log-bike="' + esc(bid) +
+            '" data-log-task="' + esc(c.taskId) + '">Log</button>';
+        }
+        c.details.forEach(function (d) {
+          html += '<div class="detail">' + esc(d) + '</div>';
+        });
+        html += '<div class="detail">' + esc(c.about) + '</div>';
+        if (c.source) html += '<div class="detail">' + esc(c.source) + '</div>';
+        html += '</div>';
+      });
+      html += '<p class="muted">No clock for parts with no published interval: drive chain ' +
+        '(the factory tables are belt-drive — add a task from your manual if yours has a chain), ' +
+        'tire replacement (on condition/wear, not mileage), coolant (air-cooled — no cooling system).</p></div>';
+    });
+    box.innerHTML = html;
+    wireLogButtons(box);
+  }
+
   function renderBikes() {
     var box = document.getElementById('bikes-list');
     var ids = Object.keys(store.bikes).sort(function (a, b) {
@@ -1431,6 +1808,21 @@ if (typeof document !== 'undefined') {
         '<div class="detail">' + esc(b ? b.name : '?') +
         (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') + '</div>';
       if (x.notes) html += '<div class="detail">' + esc(x.notes) + '</div>';
+      /* Receipt photo: attach-only, no OCR. A thumbnail + full-size
+       * view + remove when one is attached; an attach picker when
+       * there is not. The photo lives on the expense in localStorage. */
+      if (x.photo) {
+        html += '<div class="receipt-thumb"><a href="' + esc(x.photo.dataUrl) +
+          '" target="_blank" rel="noopener"><img src="' + esc(x.photo.dataUrl) +
+          '" alt="Receipt photo for ' + esc(x.description) + '"></a></div>' +
+          '<div class="detail">Receipt photo attached' +
+          (x.photo.name ? ' — ' + esc(x.photo.name) : '') +
+          ' (<a href="' + esc(x.photo.dataUrl) + '" target="_blank" rel="noopener">view full size</a>)</div>' +
+          '<button class="mini secondary" data-remove-photo="' + esc(x.id) + '">Remove photo</button>';
+      } else {
+        html += '<div class="detail"><label>Receipt photo ' +
+          '<input type="file" accept="image/*" capture="environment" data-attach-photo="' + esc(x.id) + '"></label></div>';
+      }
       html += '<button class="mini danger" data-del-expense="' + esc(x.id) + '">Delete</button>';
       html += '</div>';
     });
@@ -1471,6 +1863,7 @@ if (typeof document !== 'undefined') {
     fillBikeSelects();
     renderReminders();
     renderDue();
+    renderWearClocks();
     renderBikes();
     renderHistory();
     renderExpenses();
@@ -1502,12 +1895,25 @@ if (typeof document !== 'undefined') {
     var handoff = pendingHandoff.handoff;
     var p = handoff.payload;
     var res = pendingHandoff.resolution;
-    var html = '<div class="card"><h3>Diagnosis arrived — from the Evo Diagnostic</h3>' +
-      '<p><b>' + esc(p.topCause) + '</b></p>' +
-      '<p>' + esc(p.treeTitle) + ' · sent ' + esc(handoffSentDate(handoff)) + '</p>' +
-      '<p><b>Test:</b> ' + esc(p.test) + '</p>' +
-      '<p><b>Fix:</b> ' + esc(p.fix) + '</p>' +
-      '<p><b>Safe to ride?</b> ' + esc(p.safeToRide) + '</p>';
+    var isTiming = handoff.kind === HANDOFF_KIND_TIMING;
+    var html;
+    if (isTiming) {
+      var t = p.timing;
+      html = '<div class="card"><h3>Timing job arrived — from the Ignition Timing Helper</h3>' +
+        '<p><b>' + esc(t.ignition === 'dyna-2000i' ? 'Dyna 2000i' : 'Stock module') + ' · ' + esc(t.method) + '</b> · ' + esc(t.date) + ' · sent ' + esc(handoffSentDate(handoff)) + '</p>' +
+        (t.curve !== null ? '<p><b>Curve:</b> ' + esc(t.curve) + (t.finalAdvanceDeg !== null ? ' · <b>Final advance:</b> ' + esc(t.finalAdvanceDeg) + '°' : '') + '</p>' : '') +
+        (t.curve === null && t.finalAdvanceDeg !== null ? '<p><b>Final advance:</b> ' + esc(t.finalAdvanceDeg) + '°</p>' : '') +
+        (t.result ? '<p><b>Result:</b> ' + esc(t.result) + '</p>' : '') +
+        (t.notes ? '<p class="muted">' + esc(t.notes) + '</p>' : '') +
+        '<p class="muted">Source: ' + esc(t.source) + '</p>';
+    } else {
+      html = '<div class="card"><h3>Diagnosis arrived — from the Evo Diagnostic</h3>' +
+        '<p><b>' + esc(p.topCause) + '</b></p>' +
+        '<p>' + esc(p.treeTitle) + ' · sent ' + esc(handoffSentDate(handoff)) + '</p>' +
+        '<p><b>Test:</b> ' + esc(p.test) + '</p>' +
+        '<p><b>Fix:</b> ' + esc(p.fix) + '</p>' +
+        '<p><b>Safe to ride?</b> ' + esc(p.safeToRide) + '</p>';
+    }
     var bikeId = null, draft = null;
     if (res.status === 'matched') {
       bikeId = res.bikeId;
@@ -1523,7 +1929,7 @@ if (typeof document !== 'undefined') {
         box.innerHTML = html + '<button type="button" class="secondary" data-handoff-dismiss>Dismiss</button></div>';
         return;
       }
-      html += '<p class="muted">This diagnosis is for "' + esc(handoff.bike.name) + '" — no bike here matches it yet. Which bike is it for?</p>' +
+      html += '<p class="muted">This handoff is for "' + esc(handoff.bike.name) + '" — no bike here matches it yet. Which bike is it for?</p>' +
         '<label>Bike<select id="handoff-bike">' +
         bikeIds.map(function (id) {
           return '<option value="' + esc(id) + '">' + esc(bikeLabel(store.bikes[id])) + '</option>';
@@ -1532,7 +1938,11 @@ if (typeof document !== 'undefined') {
     }
     html += '<label>Task name<input type="text" id="handoff-task-name" value="' + esc(p.suggestedTaskName) + '" maxlength="80"></label>';
     if (draft && draft.existingTaskId) {
-      html += '<p><b>A task called "' + esc(draft.name) + '" is already on this bike</b> — confirming will not add a duplicate. It pre-fills the log-service form for that task instead, so you can log the fix when it is done.</p>';
+      html += '<p><b>A task called "' + esc(draft.name) + '" is already on this bike</b> — confirming will not add a duplicate. It pre-fills the log-service form for that task instead, so you can log the work when it is done.</p>';
+    } else if (isTiming) {
+      html += '<p class="muted">The factory check interval is ' + esc(p.suggestedIntervalMiles) + ' miles — pre-filled from ' + esc(p.intervalSource) + '. Change it if this bike is on a different schedule. (Only needed for a new task.)</p>' +
+        '<div class="grid"><label>Every (miles)<input type="number" id="handoff-miles" inputmode="numeric" min="1" step="1" value="' + esc(p.suggestedIntervalMiles) + '"></label>' +
+        '<label>Every (months)<input type="number" id="handoff-months" inputmode="numeric" min="1" step="1" placeholder="e.g. 6"></label></div>';
     } else {
       html += '<p class="muted">A diagnosis carries no service interval, so set one — miles or months, at least one — or this task has no due date. (Only needed for a new task.)</p>' +
         '<div class="grid"><label>Every (miles)<input type="number" id="handoff-miles" inputmode="numeric" min="1" step="1" placeholder="e.g. 5000"></label>' +
@@ -1542,6 +1952,20 @@ if (typeof document !== 'undefined') {
       (draft && draft.existingTaskId ? 'Log a service for this task' : 'Add task') + '</button> ' +
       '<button type="button" class="secondary" data-handoff-dismiss>Dismiss — do nothing</button></div>';
     box.innerHTML = html;
+    if (isTiming && !(draft && draft.existingTaskId)) {
+      /* Add stays disabled until an interval is given. The suggested
+       * 5,000 miles is pre-filled, so the button starts enabled and
+       * only disables if the user clears both fields. */
+      var milesEl = document.getElementById('handoff-miles');
+      var monthsEl = document.getElementById('handoff-months');
+      var confirmBtn = box.querySelector('[data-handoff-confirm]');
+      var syncInterval = function () {
+        if (confirmBtn) confirmBtn.disabled = !(milesEl.value || monthsEl.value);
+      };
+      if (milesEl) milesEl.addEventListener('input', syncInterval);
+      if (monthsEl) monthsEl.addEventListener('input', syncInterval);
+      syncInterval();
+    }
   }
 
   function receiveHandoff(text) {
@@ -1563,11 +1987,11 @@ if (typeof document !== 'undefined') {
     receiveHandoff(raw);
   }
 
-  function prefillLogForm(bikeId, taskId, notes) {
+  function prefillLogForm(bikeId, taskId, notes, dateOverride) {
     document.getElementById('log-bike').value = bikeId;
     fillTaskSelects();
     document.getElementById('log-task').value = taskId;
-    document.getElementById('log-date').value = todayISO();
+    document.getElementById('log-date').value = dateOverride || todayISO();
     var b = store.bikes[bikeId];
     document.getElementById('log-odometer').value = b ? Math.round(b.odometer) : '';
     var notesEl = document.getElementById('log-notes');
@@ -1586,7 +2010,7 @@ if (typeof document !== 'undefined') {
       var sel = document.getElementById('handoff-bike');
       bikeId = sel ? sel.value : null;
     }
-    if (!bikeId || !store.bikes[bikeId]) { toast('Pick which bike this diagnosis is for.', true); return; }
+    if (!bikeId || !store.bikes[bikeId]) { toast('Pick which bike this handoff is for.', true); return; }
     var nameEl = document.getElementById('handoff-task-name');
     var name = nameEl ? nameEl.value.trim() : handoff.payload.suggestedTaskName;
     if (!name) { toast('Give the task a name.', true); return; }
@@ -1619,10 +2043,13 @@ if (typeof document !== 'undefined') {
     pendingHandoff = null;
     renderAll();
     renderHandoffBox();
-    prefillLogForm(bikeId, taskId, draft.notes);
+    /* A timing handoff pre-fills the timing job's own date; a
+     * diagnosis has no job date, so the form takes today. */
+    var serviceDate = handoff.kind === HANDOFF_KIND_TIMING ? handoff.payload.timing.date : null;
+    prefillLogForm(bikeId, taskId, draft.notes, serviceDate);
     toast(draft.existingTaskId
       ? 'That task is already on this bike — the log form is pre-filled for it.'
-      : 'Task added — the log form is pre-filled so you can log the fix when it is done.');
+      : 'Task added — the log form is pre-filled so you can log the work when it is done.');
   }
 
   function showView(name) {
@@ -1640,6 +2067,7 @@ if (typeof document !== 'undefined') {
   document.getElementById('due-bike').addEventListener('change', function () {
     renderReminders();
     renderDue();
+    renderWearClocks();
   });
   document.getElementById('log-bike').addEventListener('change', fillTaskSelects);
   document.getElementById('history-bike').addEventListener('change', function () {
@@ -1939,8 +2367,12 @@ if (typeof document !== 'undefined') {
         description: document.getElementById('expense-description').value,
         cost: document.getElementById('expense-cost').value,
         odometer: document.getElementById('expense-odometer').value,
-        notes: document.getElementById('expense-notes').value
+        notes: document.getElementById('expense-notes').value,
+        photo: pendingExpensePhoto
       });
+      pendingExpensePhoto = null;
+      var preview = document.getElementById('expense-photo-preview');
+      if (preview) preview.innerHTML = '';
       saveStore(store);
       renderAll();
       document.getElementById('expense-description').value = '';
@@ -1949,6 +2381,59 @@ if (typeof document !== 'undefined') {
       document.getElementById('expense-notes').value = '';
       toast('Expense logged.');
     } catch (e) { toast(e.message, true); }
+  });
+
+  /* Receipt-photo wiring, delegated so it survives the expense list
+   * being rebuilt: attach on an existing entry, remove from an
+   * entry, pick on the new-expense form, clear a pending pick. */
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (!el || !el.closest) return;
+    var attach = el.closest('[data-attach-photo]');
+    if (attach && attach.files && attach.files[0]) {
+      var xid = attach.getAttribute('data-attach-photo');
+      var file = attach.files[0];
+      downscaleReceipt(file, function (err, photo) {
+        if (err) { toast(err.message, true); return; }
+        try {
+          attachExpensePhoto(store, xid, photo);
+          saveStore(store);
+          renderAll();
+          toast('Receipt photo attached.');
+        } catch (e) { toast(e.message, true); }
+      });
+      return;
+    }
+    if (el.id === 'expense-photo-input' && el.files && el.files[0]) {
+      downscaleReceipt(el.files[0], function (err, photo) {
+        if (err) { toast(err.message, true); el.value = ''; return; }
+        pendingExpensePhoto = photo;
+        var preview = document.getElementById('expense-photo-preview');
+        if (preview) {
+          preview.innerHTML = '<div class="receipt-thumb"><img src="' + esc(photo.dataUrl) +
+            '" alt="Receipt photo preview"></div>' +
+            '<button type="button" class="mini secondary" data-clear-pending-photo>Clear photo</button>';
+        }
+      });
+    }
+  });
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest('[data-remove-photo],[data-clear-pending-photo]') : null;
+    if (!el) return;
+    if (el.hasAttribute('data-remove-photo')) {
+      try {
+        removeExpensePhoto(store, el.getAttribute('data-remove-photo'));
+        saveStore(store);
+        renderAll();
+        toast('Receipt photo removed.');
+      } catch (e) { toast(e.message, true); }
+      return;
+    }
+    pendingExpensePhoto = null;
+    var preview = document.getElementById('expense-photo-preview');
+    if (preview) preview.innerHTML = '';
+    var input = document.getElementById('expense-photo-input');
+    if (input) input.value = '';
   });
 
   document.getElementById('copy-export-btn').addEventListener('click', function () {
@@ -2053,9 +2538,17 @@ if (typeof module !== 'undefined' && module.exports) {
     factoryScheduleFor: factoryScheduleFor,
     factoryScheduleModel: factoryScheduleModel,
     applyFactorySchedule: applyFactorySchedule,
+    WEAR_COMPONENTS: WEAR_COMPONENTS,
+    wearClocks: wearClocks,
+    MAX_PHOTO_CHARS: MAX_PHOTO_CHARS,
+    isExpensePhoto: isExpensePhoto,
+    attachExpensePhoto: attachExpensePhoto,
+    removeExpensePhoto: removeExpensePhoto,
     SOON_MILES: SOON_MILES, SOON_DAYS: SOON_DAYS,
     HANDOFF_FORMAT: HANDOFF_FORMAT, HANDOFF_VERSION: HANDOFF_VERSION,
-    HANDOFF_KIND: HANDOFF_KIND, HANDOFF_MAX_CHARS: HANDOFF_MAX_CHARS,
+    HANDOFF_KIND: HANDOFF_KIND, HANDOFF_KINDS: HANDOFF_KINDS,
+    HANDOFF_KIND_DIAGNOSIS: HANDOFF_KIND_DIAGNOSIS,
+    HANDOFF_KIND_TIMING: HANDOFF_KIND_TIMING, HANDOFF_MAX_CHARS: HANDOFF_MAX_CHARS,
     encodePocketHandoff: encodePocketHandoff, parsePocketHandoff: parsePocketHandoff,
     validatePocketHandoff: validatePocketHandoff,
     normalizeBikeName: normalizeBikeName, namesMatch: namesMatch,

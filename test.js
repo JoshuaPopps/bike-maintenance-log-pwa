@@ -373,6 +373,224 @@ check('Yamaha includes MT-07 and YZF-R6',
     Object.keys(s.tasks).length === 4);
 })();
 
+/* --- Sportster factory-schedule auto-fill --- */
+(function () {
+  var sched = app.factoryScheduleFor('Harley-Davidson', '1200', 1998);
+  check('1200 1998 matches the Sportster schedule',
+    !!sched && sched.label === 'Sportster XL/XLH (1986–2003)');
+  check('Sportster schedule carries 18 tasks', !!sched && sched.tasks.length === 18);
+  check('Sportster schedule cites FSM #99484-98',
+    !!sched && sched.source.indexOf('#99484-98') >= 0);
+  var plugs = sched.tasks.filter(function (t) { return t.name === 'Spark plugs'; })[0];
+  check('Sportster spark plugs replace 10,000 — flagged, not the Softail 20,000',
+    !!plugs && plugs.every_miles === 10000 &&
+    plugs.notes.indexOf('SPORTSTER value') >= 0 &&
+    plugs.notes.indexOf('20,000') >= 0);
+  var cables = sched.tasks.filter(function (t) { return t.name === 'Throttle cables'; })[0];
+  check('Sportster throttle cables lube 5,000 — flagged, not the Softail 10,000',
+    !!cables && cables.every_miles === 5000 &&
+    cables.notes.indexOf('SPORTSTER value') >= 0);
+  var tires = sched.tasks.filter(function (t) { return t.name === 'Tires'; })[0];
+  check('Sportster tires inspect 2,500 — flagged, not the Softail 5,000',
+    !!tires && tires.every_miles === 2500 &&
+    tires.notes.indexOf('SPORTSTER value') >= 0);
+  var primary = sched.tasks.filter(function (t) { return t.name === 'Primary / transmission fluid'; })[0];
+  check('Sportster has one shared-sump primary/transmission task, not two',
+    !!primary && primary.every_miles === 5000 &&
+    !sched.tasks.some(function (t) { return t.name === 'Transmission fluid'; }) &&
+    !sched.tasks.some(function (t) { return t.name === 'Primary fluid'; }));
+  var pads = sched.tasks.filter(function (t) { return t.name === 'Brake pads'; })[0];
+  check('Sportster brake pads inspect 2,500 from FSM #99484-98',
+    !!pads && pads.every_miles === 2500 && pads.notes.indexOf('#99484-98') >= 0);
+  check('Sportster year bounds hold (1986 and 2003 in, 1985 and 2004 out)',
+    !!app.factoryScheduleFor('Harley-Davidson', '883', 1986) &&
+    !!app.factoryScheduleFor('Harley-Davidson', '1200 Sport', 2003) &&
+    !app.factoryScheduleFor('Harley-Davidson', '1200', 1985) &&
+    !app.factoryScheduleFor('Harley-Davidson', '1200', 2004));
+  check('modern Sportster (Iron 883 2020) gets no schedule',
+    !app.factoryScheduleFor('Harley-Davidson', 'Iron 883', 2020));
+  check('picker lists the 1986–2003 Sportster models',
+    app.commonModels('Harley-Davidson').some(function (e) { return e.model === '1200'; }) &&
+    app.commonModels('Harley-Davidson').some(function (e) { return e.model === '883 Hugger'; }));
+})();
+(function () {
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'My 1200', year: '1998', make: 'Harley-Davidson', model: '1200', odometer: '15000' });
+  var bid = Object.keys(s.bikes)[0];
+  var res = app.applyFactorySchedule(s, bid);
+  check('Sportster auto-fill adds all 18 factory tasks',
+    res.added === 18 && res.skipped === 0 && Object.keys(s.tasks).length === 18);
+  var plugsId = Object.keys(s.tasks).filter(function (id) { return s.tasks[id].name === 'Spark plugs'; })[0];
+  check('filled Sportster plugs carry the flagged source note',
+    s.tasks[plugsId].notes.indexOf('SPORTSTER value') >= 0);
+  var again = app.applyFactorySchedule(s, bid);
+  check('Sportster re-apply adds nothing, skips all 18',
+    again.added === 0 && again.skipped === 18);
+  app.validateImport(JSON.parse(JSON.stringify(s)));
+  check('auto-filled Sportster logbook still validates as CLI-shaped', true);
+})();
+(function () {
+  /* A Sportster bike never gets a Softail value, and vice versa. */
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Sporty', year: '1998', make: 'Harley-Davidson', model: '1200', odometer: '15000' });
+  var sbid = Object.keys(s.bikes)[0];
+  app.applyFactorySchedule(s, sbid);
+  app.addBike(s, { name: 'Fatty', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '20000' });
+  var fbid = Object.keys(s.bikes).filter(function (id) { return s.bikes[id].name === 'Fatty'; })[0];
+  app.applyFactorySchedule(s, fbid);
+  var sportyPlugs = Object.keys(s.tasks).filter(function (id) {
+    return s.tasks[id].bike_id === sbid && s.tasks[id].name === 'Spark plugs';
+  })[0];
+  var fattyPlugs = Object.keys(s.tasks).filter(function (id) {
+    return s.tasks[id].bike_id === fbid && s.tasks[id].name === 'Spark plugs';
+  })[0];
+  check('Sportster plugs 10,000 beside Softail plugs 20,000 in one logbook',
+    s.tasks[sportyPlugs].every_miles === 10000 && s.tasks[fattyPlugs].every_miles === 20000);
+})();
+
+/* --- wear clocks --- */
+(function () {
+  var s = app.emptyStore();
+  var r = bikeWithTask(s, { odo: 40000, miles: 5000, baseline_odo: 37000, baseline_date: '2026-01-01' });
+  function oilClock() {
+    return app.wearClocks(s, r.bid, '2026-11-04').filter(function (c) { return c.component === 'Engine oil'; })[0];
+  }
+  check('wear clock quiet before the published interval',
+    oilClock().status === 'ok' && oilClock().tracked === true);
+  s.bikes[r.bid].odometer = 41500;
+  check('wear clock due-soon inside 500 mi of the interval',
+    oilClock().status === 'due-soon');
+  s.bikes[r.bid].odometer = 42000;
+  check('wear clock overdue at the published interval',
+    oilClock().status === 'overdue');
+  app.logService(s, { bike_id: r.bid, task_id: r.tid, date: '2026-11-04', odometer: '42000', cost: '' });
+  check('wear clock resets on a logged service',
+    oilClock().status === 'ok');
+  check('wear clock shows the task interval',
+    oilClock().interval.indexOf('5,000') >= 0);
+})();
+(function () {
+  /* A Sportster plugs clock runs on the Sportster interval (10,000),
+   * not the Softail one (20,000). */
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Sporty', year: '1998', make: 'Harley-Davidson', model: '1200', odometer: '15000' });
+  var bid = Object.keys(s.bikes)[0];
+  app.applyFactorySchedule(s, bid);
+  var plugs = app.wearClocks(s, bid, '2026-11-04').filter(function (c) { return c.component === 'Spark plugs'; })[0];
+  check('Sportster plugs clock uses the 10,000-mi interval',
+    !!plugs && plugs.tracked === true && plugs.interval.indexOf('10,000') >= 0);
+  check('Sportster plugs clock cites the Sportster source',
+    plugs.source.indexOf('#99484-98') >= 0);
+})();
+(function () {
+  /* A bike with a factory schedule but no tasks yet shows the
+   * published interval as not-tracked, not a made-up clock. */
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Bare Fat Boy', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '20000' });
+  var bid = Object.keys(s.bikes)[0];
+  var before = JSON.stringify(s);
+  var clocks = app.wearClocks(s, bid, '2026-11-04');
+  check('wearClocks changes nothing in the store', JSON.stringify(s) === before);
+  var oil = clocks.filter(function (c) { return c.component === 'Engine oil'; })[0];
+  check('untracked component shows the published interval',
+    oil.status === 'not-tracked' && oil.interval.indexOf('5,000') >= 0 &&
+    oil.source.indexOf('#99482-98') >= 0);
+  /* A bike with no schedule at all gets no-interval, never invented. */
+  var s2 = app.emptyStore();
+  app.addBike(s2, { name: 'Tiger', year: '2020', make: 'Triumph', model: 'Tiger 900', odometer: '5000' });
+  var bid2 = Object.keys(s2.bikes)[0];
+  var oil2 = app.wearClocks(s2, bid2, '2026-11-04').filter(function (c) { return c.component === 'Engine oil'; })[0];
+  check('unscheduled bike shows no-interval, never an invented one',
+    oil2.status === 'no-interval' && oil2.tracked === false);
+})();
+(function () {
+  /* Omitted components get no clock, by design. */
+  check('no drive-chain clock (factory tables are belt-drive)',
+    !app.WEAR_COMPONENTS.some(function (c) { return c.component === 'Drive chain'; }));
+  check('no coolant clock (air-cooled)',
+    !app.WEAR_COMPONENTS.some(function (c) { return c.component === 'Coolant'; }));
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Fat Boy', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '20000' });
+  var bid = Object.keys(s.bikes)[0];
+  app.applyFactorySchedule(s, bid);
+  var tires = app.wearClocks(s, bid, '2026-11-04').filter(function (c) { return c.component === 'Tires'; })[0];
+  check('tires clock is the inspect interval, with the replace-on-condition note',
+    !!tires && tires.tracked === true && tires.interval.indexOf('5,000') >= 0 &&
+    tires.about.indexOf('replace on condition') >= 0);
+  var threw = false;
+  try { app.wearClocks(s, 'b99'); } catch (e) { threw = true; }
+  check('wear clock for an unknown bike throws', threw);
+})();
+
+/* --- receipt photos on expenses --- */
+var TINY_JPEG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AvwH/2Q==';
+(function () {
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Bike', odometer: '1000' });
+  var bid = Object.keys(s.bikes)[0];
+  var x = app.addExpense(s, { bike_id: bid, date: '2026-11-04', category: 'parts', description: 'Oil', cost: '48.50' });
+  check('expense without a photo loads with photo null', x.photo === null);
+  app.attachExpensePhoto(s, x.id, { name: 'receipt.jpg', type: 'image/jpeg', dataUrl: TINY_JPEG });
+  check('attach stores the photo on the expense',
+    s.expenses[0].photo && s.expenses[0].photo.dataUrl === TINY_JPEG);
+  check('attached photo validates', app.isExpensePhoto(s.expenses[0].photo) === true);
+  throws('non-image data URL rejected', function () {
+    app.attachExpensePhoto(s, x.id, { name: 'x.txt', type: 'text/plain', dataUrl: 'data:text/plain;base64,aGk=' });
+  });
+  throws('oversize photo rejected', function () {
+    var big = 'data:image/jpeg;base64,' + new Array(app.MAX_PHOTO_CHARS).join('A');
+    app.attachExpensePhoto(s, x.id, { name: 'big.jpg', type: 'image/jpeg', dataUrl: big });
+  });
+  check('rejected attach leaves the good photo alone',
+    s.expenses[0].photo && s.expenses[0].photo.dataUrl === TINY_JPEG);
+  check('remove photo returns true and clears it',
+    app.removeExpensePhoto(s, x.id) === true && s.expenses[0].photo === null);
+  check('remove photo again returns false',
+    app.removeExpensePhoto(s, x.id) === false);
+  throws('attach to an unknown expense throws', function () {
+    app.attachExpensePhoto(s, 'x99', { name: 'r.jpg', type: 'image/jpeg', dataUrl: TINY_JPEG });
+  });
+})();
+(function () {
+  /* Old expense entries (no photo key) load fine and validate. */
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Bike', odometer: '1000' });
+  var bid = Object.keys(s.bikes)[0];
+  var old = {
+    bikes: s.bikes, tasks: {}, entries: [],
+    expenses: [{ id: 'x1', bike_id: bid, date: '2026-11-01', category: 'parts', description: 'Old oil', cost: 30, odometer: 42000, notes: '' }]
+  };
+  var imported = app.validateImport(JSON.parse(JSON.stringify(old)));
+  check('old expense with no photo key validates',
+    imported.expenses.length === 1 && imported.expenses[0].photo == null);
+  var withPhoto = JSON.parse(JSON.stringify(old));
+  withPhoto.expenses[0].photo = { name: 'r.jpg', type: 'image/jpeg', dataUrl: TINY_JPEG };
+  check('expense with a valid photo validates',
+    app.validateImport(withPhoto).expenses[0].photo.dataUrl === TINY_JPEG);
+  var badPhoto = JSON.parse(JSON.stringify(old));
+  badPhoto.expenses[0].photo = { name: 'r.jpg', type: 'image/jpeg', dataUrl: 'data:text/plain;base64,aGk=' };
+  throws('expense with a bad photo fails validation', function () { app.validateImport(badPhoto); });
+})();
+(function () {
+  /* Exports flag the photo without embedding it. */
+  var s = app.emptyStore();
+  app.addBike(s, { name: 'Bike', odometer: '1000' });
+  var bid = Object.keys(s.bikes)[0];
+  var x = app.addExpense(s, { bike_id: bid, date: '2026-11-04', category: 'parts', description: 'Oil', cost: '48.50' });
+  app.attachExpensePhoto(s, x.id, { name: 'receipt.jpg', type: 'image/jpeg', dataUrl: TINY_JPEG });
+  app.addExpense(s, { bike_id: bid, date: '2026-11-05', category: 'labor', description: 'Shop time', cost: '100' });
+  var exp = app.bikeExpensesExport(s, bid);
+  check('expenses export flags has_photo per expense (newest first)',
+    exp.expenses[0].has_photo === false && exp.expenses[1].has_photo === true);
+  check('expenses export does not embed the photo data',
+    JSON.stringify(exp).indexOf('data:image') === -1);
+  check('expenses text notes the attached photo',
+    app.bikeExpensesText(s, bid).indexOf('receipt photo attached') >= 0);
+  var hist = app.bikeHistoryExport(s, bid);
+  check('history export flags has_photo on its expenses',
+    hist.expenses[1].has_photo === true);
+})();
+
 /* --- due reminders --- */
 (function () {
   var s = app.sampleStore();
@@ -591,6 +809,95 @@ throws('oversize handoff rejected', function () {
   });
 })();
 
+console.log('pocket handoff — timing job to task (receiving side, kind timing-to-task)');
+function exampleTimingHandoff(overrides) {
+  var h = {
+    format: 'pocket-garage-handoff', version: 1, kind: 'timing-to-task',
+    sentAt: '2026-11-25T18:00:00.000Z', from: 'ignition-timing-helper',
+    bike: { rosterKey: 'b1', name: '1995 Fat Boy' },
+    payload: {
+      timing: {
+        date: '2026-11-25', ignition: 'dyna-2000i', method: 'dynamic', curve: 2,
+        finalAdvanceDeg: 35,
+        result: 'Mark centered at full advance, no ping on a test ride.',
+        notes: 'Switched from curve 3 after pinging on curve 2 was cured — recheck after 500 miles.',
+        source: 'Dynatek 2801103 Rev. C (curves/final advance); FSM #99482-98 Ch. 1 + Ch. 8 (factory 20° BTDC check)'
+      },
+      suggestedTaskName: 'Ignition timing — check / adjust',
+      suggestedIntervalMiles: 5000,
+      intervalSource: 'FSM #99482-98 Ch. 1 + Ch. 8: check timing every 5,000 miles'
+    }
+  };
+  if (overrides) Object.keys(overrides).forEach(function (k) { h[k] = overrides[k]; });
+  return h;
+}
+var _tt = exampleTimingHandoff();
+check('timing handoff round-trips through base64url',
+  JSON.stringify(app.parsePocketHandoff(app.encodePocketHandoff(_tt))) === JSON.stringify(_tt));
+check('timing handoff parses from raw pasted JSON too',
+  app.parsePocketHandoff(JSON.stringify(_tt)).payload.suggestedIntervalMiles === 5000);
+throws('timing handoff with curve 5 rejected', function () {
+  var h = exampleTimingHandoff(); h.payload.timing.curve = 5;
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('timing handoff with a curve on stock ignition rejected', function () {
+  var h = exampleTimingHandoff();
+  h.payload.timing.ignition = 'stock'; h.payload.timing.curve = 2;
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('timing handoff with a bad method rejected', function () {
+  var h = exampleTimingHandoff(); h.payload.timing.method = 'guess';
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('timing handoff with no interval source rejected', function () {
+  var h = exampleTimingHandoff(); h.payload.intervalSource = '';
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('wiring kind rejected by the bike log', function () {
+  app.parsePocketHandoff(JSON.stringify(exampleTimingHandoff({ kind: 'wiring-to-mod' })));
+});
+(function () {
+  var h = exampleTimingHandoff();
+  h.payload.timing.ignition = 'stock'; h.payload.timing.method = 'check';
+  h.payload.timing.curve = null; h.payload.timing.finalAdvanceDeg = null;
+  h.payload.timing.source = 'FSM #99482-98 Ch. 1 + Ch. 8 (factory 20° BTDC check)';
+  var parsed = app.parsePocketHandoff(JSON.stringify(h));
+  check('stock check with no curve validates, invents neither curve nor advance',
+    parsed.payload.timing.curve === null && parsed.payload.timing.finalAdvanceDeg === null);
+  var r = app.emptyStore();
+  var rb = app.addBike(r, { name: '1995 Fat Boy', odometer: '10000' });
+  var rid = Object.keys(r.bikes).filter(function (id) { return r.bikes[id] === rb; })[0];
+  check('timing bike resolves by name match (no pin yet)',
+    (function () { var res = app.resolvePocketHandoffBike(r, _tt); return res.status === 'matched' && res.via === 'name'; })());
+  app.pinPocketRosterKey(r, 'b1', rid);
+  check('after pinning, the timing handoff resolves by roster key',
+    app.resolvePocketHandoffBike(r, _tt).via === 'roster');
+  check('unknown timing bike resolves to unknown, never a guess',
+    (function () { var bad = exampleTimingHandoff(); bad.bike = { rosterKey: 'b9', name: 'No Such Bike' };
+      return app.resolvePocketHandoffBike(r, bad).status === 'unknown'; })());
+  var s = app.sampleStore();
+  var bid = Object.keys(s.bikes)[0];
+  var draft = app.taskFromHandoff(s, _tt, bid);
+  check('timing task draft carries the suggested name and the timing citation',
+    draft.name === 'Ignition timing — check / adjust' && draft.existingTaskId === null &&
+    draft.notes.indexOf('From the Ignition Timing Helper, 2026-11-25:') === 0 &&
+    draft.notes.indexOf('dyna-2000i, dynamic, curve 2, 35° final advance') >= 0 &&
+    draft.notes.indexOf('Mark centered at full advance') >= 0 &&
+    draft.notes.indexOf('Dynatek 2801103 Rev. C') >= 0);
+  check('timing citation never invents an interval',
+    draft.notes.indexOf('5000') < 0 && draft.notes.indexOf('every') < 0);
+  var added = app.addTask(s, {
+    bike_id: bid, name: draft.name, every_miles: '5000', every_months: '', notes: draft.notes
+  });
+  check('confirming with the suggested 5000-mi interval creates the task', !!added);
+  var draft2 = app.taskFromHandoff(s, _tt, bid);
+  check('second timing handoff finds the existing task, no duplicate',
+    draft2.existingTaskId !== null);
+  var stockDraft = app.taskFromHandoff(s, parsed, bid, 'Ignition timing — stock check');
+  check('stock-check citation shows no curve figure and no advance figure',
+    stockDraft.notes.indexOf(', curve ') < 0 && stockDraft.notes.indexOf('final advance') < 0);
+})();
+
 /* --- expenses --- */
 function expenseStore() {
   var s = app.emptyStore();
@@ -795,12 +1102,16 @@ var path = require('path');
 var _sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
 var _html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 var _appjs = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-check('sw.js caches v13', _sw.indexOf('bike-maintenance-log-v13') >= 0);
+check('sw.js caches v15', _sw.indexOf('bike-maintenance-log-v15') >= 0);
 check('sw.js precaches sw-update.js', _sw.indexOf('sw-update.js') >= 0);
 check('sw.js has the SKIP_WAITING message handler',
   _sw.indexOf("addEventListener('message'") >= 0 && _sw.indexOf('SKIP_WAITING') >= 0);
 check('sw.js does not call skipWaiting on install',
   (_sw.split('self.skipWaiting()').length - 1) === 1);
+check('index.html has the wear-clocks container', _html.indexOf('id="wear-clocks"') >= 0);
+check('index.html has the expense photo input', _html.indexOf('id="expense-photo-input"') >= 0);
+check('index.html references the Sportster schedule', _html.indexOf('#99484-98') >= 0);
+check('index.html flags the Sportster disagreements', _html.indexOf('disagrees with the Softail book') >= 0);
 check('index.html loads sw-update.js before app.js',
   _html.indexOf('src="sw-update.js"') >= 0 &&
   _html.indexOf('src="sw-update.js"') < _html.indexOf('src="app.js"'));

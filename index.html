@@ -29,6 +29,7 @@
       <select id="due-bike"></select>
     </label>
     <div id="due-list"></div>
+    <div id="wear-clocks"></div>
 
     <h2>Log a service</h2>
     <form id="log-form" class="card">
@@ -87,7 +88,7 @@
     </form>
 
     <h3>Add a task</h3>
-    <p class="muted">Factory intervals fill in automatically for 1984–1999 Evo Softails when you add the bike — every filled-in task names its manual. Anything else: intervals come from <b>your</b> manual, not from this app. Tap a common name to fill it in, then set the interval yourself.</p>
+    <p class="muted">Factory intervals fill in automatically for 1984–1999 Evo Softails and 1986–2003 Sportsters when you add the bike — every filled-in task names its manual. Anything else: intervals come from <b>your</b> manual, not from this app. Tap a common name to fill it in, then set the interval yourself.</p>
     <form id="task-form" class="card">
       <div class="grid">
         <label>Bike<select id="task-bike" required></select></label>
@@ -152,6 +153,8 @@
         <label>Odometer (mi)<input type="number" id="expense-odometer" inputmode="numeric" min="0" step="1"></label>
       </div>
       <label>Notes<textarea id="expense-notes" rows="2" placeholder="e.g. where you bought it, invoice number"></textarea></label>
+      <label>Receipt photo (optional)<input type="file" id="expense-photo-input" accept="image/*" capture="environment"></label>
+      <div id="expense-photo-preview"></div>
       <button type="submit" class="primary">Log expense</button>
     </form>
 
@@ -230,6 +233,44 @@
         <li><b>Banjo bolts</b> — 17–22 ft-lbs</li>
         <li><b>Spark plugs</b> — 18–22 ft-lbs</li>
       </ul>
+    </div>
+
+    <h2>Service reference — Sportster XL/XLH (1986–2003)</h2>
+    <p class="muted">From the 1998 Sportster Factory Service Manual #99484-98, §1 "Regular Maintenance Intervals — XLH Sportster Models" (p.1-2), corroborated by the 1986–2003 Sportster Service Manual (Clymer), Ch. 3, Table 1. First service at 500 mi in the factory table (Clymer says an initial 1,000 mi). Items marked * are also done prior to storage or annually. Your manual wins if it disagrees.</p>
+    <div class="card">
+      <h3>Service intervals — mileage-based only</h3>
+      <ul>
+        <li><b>Engine oil + filter</b> — replace every 5,000 mi *</li>
+        <li><b>Primary / transmission fluid</b> — replace every 5,000 mi (one shared sump — one job, not the Softail's two fluids)</li>
+        <li><b>Primary chain</b> — inspect every 5,000 mi</li>
+        <li><b>Clutch adjustment</b> — every 5,000 mi</li>
+        <li><b>Drive belt</b> — inspect every 5,000 mi (first inspect 2,500 mi; adjust at the 500-mi first service)</li>
+        <li><b>Brake fluid</b> — inspect level/condition every 5,000 mi (DOT 5 only) *</li>
+        <li><b>Tires</b> — inspect pressure and wear every 2,500 mi (and pre-ride); replace on condition/wear, not on mileage</li>
+        <li><b>Air filter</b> — inspect/clean every 5,000 mi</li>
+        <li><b>Battery</b> — tighten connections every 5,000 mi; check fluid level every 2,500 mi</li>
+        <li><b>Fork oil</b> — replace every 10,000 mi</li>
+        <li><b>Wheel bearings</b> — inspect/lubricate every 10,000 mi *</li>
+        <li><b>Fuel tank filter screen</b> — inspect every 5,000 mi</li>
+        <li><b>Throttle cables</b> — lubricate every 5,000 mi</li>
+        <li><b>Spark plugs</b> — inspect at 5,000 mi, replace every 10,000 mi</li>
+        <li><b>Steering head bearing adjustment</b> — inspect/lubricate every 5,000 mi</li>
+        <li><b>Brake pads</b> — inspect linings and discs for wear every 2,500 mi; minimum pad thickness 0.062 in.</li>
+        <li><b>Rear fork bearings</b> — inspect/lubricate every 5,000 mi *</li>
+        <li><b>Jiffy stand</b> — lubricate every 5,000 mi</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Where the Sportster book disagrees with the Softail book</h3>
+      <ul>
+        <li><b>Spark plugs</b> — Sportster: replace every 10,000 mi. Softail: 20,000 mi.</li>
+        <li><b>Throttle cables</b> — Sportster: lubricate every 5,000 mi. Softail: 10,000 mi.</li>
+        <li><b>Tires</b> — Sportster: inspect every 2,500 mi. Softail: 5,000 mi.</li>
+        <li><b>Fuel filter</b> — Sportster: inspect the tank screen every 5,000 mi. Softail: replace the filter every 10,000 mi. Different jobs.</li>
+        <li><b>Steering head</b> — Sportster: adjust/lubricate every 5,000 mi. Softail: remove, inspect, repack every 20,000 mi. Different jobs.</li>
+        <li><b>Primary / transmission</b> — Sportster: one shared sump, one job. Softail: two separate fluids.</li>
+      </ul>
+      <p class="muted">The auto-fill uses the Sportster numbers on Sportster bikes and the Softail numbers on Softail bikes — never mixed, never silently overwritten.</p>
     </div>
   </section>
 </main>
