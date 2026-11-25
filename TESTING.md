@@ -4,7 +4,7 @@ Tested 2026-11-04; v1.2.0 factory auto-fill tested 2026-11-20. No build step, no
 Test data was throwaway example data — nothing here is anyone's real
 bike or real mileage.
 
-## Core-logic tests — `node test.js` (80 passed, 0 failed)
+## Core-logic tests — `node test.js` (186 passed, 0 failed)
 
 Run from the app directory against Node 24:
 
@@ -218,3 +218,102 @@ Rules the implementation holds to:
   first and this feature was re-applied on top of them, so nothing
   live was overwritten; the sync record's newest entry before this
   push was 126242b, live head 5be1f15.
+
+## v1.3.0 — due reminders + per-bike service history export (2026-11-24)
+
+- **Due reminders:** a Reminders card now sits at the top of the Due
+  tab on open, showing only overdue and due-soon tasks, worst first,
+  with the counts up front ("1 overdue, 1 due soon") — or "all caught
+  up" when nothing needs attention. It follows the Due tab's bike
+  filter. Each reminder row has the same Log button as the full list
+  (shared `wireLogButtons` helper). Reminders are read-only
+  (`dueReminders` in app.js): they never add, change, or overwrite
+  any task — factory-filled or user-set — and the full list including
+  ok tasks is still below the card.
+- **Per-bike history export:** the History tab gains an export card.
+  Pick one bike in the History filter and download its completed
+  service records as JSON (`bike-log-<bike>-history.json`: bike,
+  tasks with intervals, services newest first, service count, total
+  spent) or as readable plain text (`bike-log-<bike>-history.txt`:
+  header with bike spec and odometer, task list, one line per service
+  with date / task / mileage / cost / notes, total). A Copy text
+  button mirrors the Data tab's clipboard pattern. Export is one bike
+  at a time — "All bikes" gets a polite "Pick a bike first" toast and
+  downloads nothing. A bike with no services exports an empty
+  history, not an error.
+- Node tests grew from 80 to 111 (+31): reminders from the sample
+  (1 overdue / 1 due soon / ok excluded / overdue first / per-bike
+  scoping / unknown bike empty / all-ok logbook empty / read-only),
+  history export (shape, newest first, $78.50 total, task list,
+  JSON round-trip, unknown bike throws, Bike A vs Bike B isolation
+  in both JSON and text, empty-history bike), text export content
+  (header, service line, total, task intervals, notes, trailing
+  newline), and filename slugging (spaces, apostrophes, empty name).
+- Real-browser check (Playwright, 22 checks, 0 console errors, local
+  temp copy with locally downloaded fonts): reminders card on the
+  example logbook, Log pre-fill from a reminder row, JSON + text
+  downloads with per-bike filenames and verified contents, All-bikes
+  refusal, picker + factory auto-fill still working (16 tasks land in
+  the full Due list), all-caught-up state on a fresh bike, and a
+  follow-up pass confirming the per-bike filter (Fat Boy filtered →
+  all caught up; back to All bikes → the example's 2 reminders).
+- Service-worker cache bumped v9 → v10.
+- Live dyno styles.css fetched and compared before this landed: the
+  1990 Treatment variables match the app's own styles.css, so no
+  restyle was needed — the new Reminders card reuses the existing
+  card/badge/palette classes plus a 3px accent edge (signal red while
+  anything is overdue).
+
+## v1.4.0 — Expenses tab (2026-11-25)
+
+- **Expenses tab:** money out, per bike, in four buckets — Parts,
+  Labor, Service, Other. Every number is user-entered; the app never
+  suggests a price, never invents a part price or labor rate, and
+  never displays a "typical shop cost". A logged service keeps its
+  own cost field — this tab is for the money around it (parts bought
+  ahead of a job, a shop bill, anything that is not a service entry).
+  Filter by bike and category, see the total plus the per-category
+  breakdown, delete an entry (with confirm). No reference content was
+  added — there is no sourced price or labor data in the library to
+  cite, and inventing any would break the library-first rule.
+- **Data model:** one new top-level key, `expenses` (records `x1`,
+  `x2`, … — same highest-suffix-plus-one id rule as service entries).
+  The CLI's `data.json` shape is untouched: `bikes` / `tasks` /
+  `entries` are exactly as before, and the CLI ignores the extra key,
+  so the file still trades both ways. Importing a CLI export (no
+  `expenses` key) loads with an empty expenses list; old logbooks in
+  localStorage get the same default on load. Removing a bike drops
+  its expenses; `mergeSample` carries a sample's expenses onto the
+  remapped bike. `validateImport` rejects expenses pointing at a
+  missing bike, with a bad cost, or with an unknown category.
+- **History export carries expenses:** the per-bike history export
+  (JSON + text) now has its own expenses section — newest first, with
+  `expenses_total` and a `grand_total` (services + expenses). The
+  services part of the file is byte-for-byte the old shape; nothing
+  that reads it breaks. The Expenses tab also has its own per-bike
+  export (`bike-log-<bike>-expenses.json` / `.txt`, plus Copy text),
+  one bike at a time, same "pick a bike first" guard as history.
+  The Data tab counts now include expenses ("3 expenses logged
+  ($117.50)").
+- Node tests grew from 139 to 186 (+47): add-expense validation
+  (unknown bike, empty description, missing/negative cost, bad date,
+  unknown category, negative odometer, $0 allowed, blank category
+  defaults to other, cost rounds to cents), id rule, newest-first
+  ordering, per-bike and per-category filtering, totals and
+  per-category breakdowns, delete + unknown-delete throws,
+  bike-removal cascade, history-export inclusion (services total
+  unchanged, expenses newest first, grand total, text section and
+  grand-total line, empty-expenses bike), expenses-only export
+  (shape, round-trip, isolation, text content, filename slugging),
+  import (expenses carried, pre-expenses file defaults empty,
+  missing-bike / negative-cost / unknown-category rejected),
+  mergeSample carrying expenses.
+- Static checks in place of the jsdom smoke test this round (jsdom
+  is not installed on this VM): every `getElementById` id in app.js
+  exists in index.html (the only four absent are the handoff confirm
+  card's, which are generated by innerHTML — pre-existing), nav
+  buttons match view sections 1:1, all 15 expense element ids are
+  present, and the static-server check returns 200 for every shipped
+  asset. A real-browser pass (add an expense, filter, export, check
+  the History export's grand total) is still owed before publish.
+- Service-worker cache bumped v12 → v13.

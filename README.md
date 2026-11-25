@@ -23,7 +23,11 @@ and the two trade one JSON file back and forth.
   overdue, then due soon, then ok. Each row shows the interval, what
   the last service was (or that nothing's been logged yet, counting
   from task creation), and a **Log** button that pre-fills the service
-  form for that task.
+  form for that task. On open, a **Reminders** card sits at the top
+  with just the overdue and due-soon jobs and the counts up front
+  ("1 overdue, 1 due soon") — or "all caught up" when nothing needs
+  attention. Reminders only surface what's due; they never add,
+  change, or overwrite any task, factory-filled or your own.
 - **Bikes & Tasks tab** — multiple bikes, each with its own tasks and
   odometer. Add a bike by picking from the common-bikes catalog
   (Harley-Davidson, Triumph, Honda, Suzuki, Kawasaki, Yamaha — 106
@@ -43,7 +47,26 @@ and the two trade one JSON file back and forth.
   factory intervals as a starting point, but your manual wins for
   your bike.
 - **History tab** — every logged service, newest first, filterable by
-  bike and task, with a running total of what you've spent.
+  bike and task, with a running total of what you've spent. Pick one
+  bike and export just its history — as JSON
+  (`bike-log-<bike>-history.json`) or as readable plain text
+  (`bike-log-<bike>-history.txt`, one line per service with date,
+  task, mileage, cost, and notes, plus the bike's tasks and the total
+  spent) — or copy the text to the clipboard. Export is one bike at a
+  time; "All bikes" asks you to pick one first. The history export
+  also carries the bike's expenses (see below) as its own section,
+  with a grand total of services + expenses; the services part of the
+  file is unchanged.
+- **Expenses tab** — what you actually spent, per bike, in four
+  buckets: Parts, Labor, Service, Other. A logged service already has
+  its own cost field — this tab is for the money around it: parts
+  bought ahead of a job, a shop bill, anything that is not a service
+  entry. Every number is one you typed in; the app never suggests a
+  price and never shows a "typical shop cost". Filter by bike and
+  category, see the total and the per-category breakdown, delete an
+  entry, or export one bike's expenses as JSON
+  (`bike-log-<bike>-expenses.json`) or plain text. Export is one bike
+  at a time, same as history.
 - **Data tab** — export the whole logbook as one JSON file, import a
   logbook back, load example data to try it out, or wipe everything.
 - **Reference tab** — factory service intervals, fluid specs, tire
@@ -118,6 +141,13 @@ the CLI reads it (or point `BIKE_LOG_HOME` at that folder), and
 `bike_log.py due` prints the same statuses. Import a CLI export into
 the app the same way. Verified both directions — see TESTING.md.
 
+The app's export also carries an `expenses` array (one record per
+expense, ids `x1`, `x2`, …) that the CLI does not know about — it
+ignores keys it doesn't read, so the file still trades both ways.
+Importing a CLI export (no `expenses` key) loads with an empty
+expenses list; exporting from the app keeps the expenses in the
+file, so they survive the round trip.
+
 ## How due dates work
 
 - A task with a miles interval is due at **last-service mileage +
@@ -150,7 +180,7 @@ with DOT 3/4** (§1, p.1-42; part nos. 99902-77 / 99901-77).
 ## Tests
 
 ```bash
-node test.js   # core logic: 80 checks, no dependencies
+node test.js   # core logic: 186 checks, no dependencies
 ```
 
 The core logic (due math, odometer rules, import validation, sample

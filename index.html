@@ -23,6 +23,8 @@
 <main>
   <!-- DUE -->
   <section id="view-due" class="view active">
+    <div id="handoff-box"></div>
+    <div id="reminders"></div>
     <label>Bike
       <select id="due-bike"></select>
     </label>
@@ -108,6 +110,58 @@
     </div>
     <p id="history-total" class="card"></p>
     <div id="history-list"></div>
+    <div class="card">
+      <h3>Export this bike's history</h3>
+      <p class="muted">Downloads the completed service records for the bike picked above — as JSON, or as readable plain text you can print or paste into a for-sale listing. Pick one bike first; "All bikes" exports nothing.</p>
+      <button id="history-export-json-btn" class="primary">Download JSON (this bike)</button>
+      <button id="history-export-text-btn" class="secondary">Download text (this bike)</button>
+      <button id="history-copy-text-btn" class="secondary">Copy text</button>
+    </div>
+  </section>
+
+  <!-- EXPENSES -->
+  <section id="view-expenses" class="view">
+    <h2>Expenses</h2>
+    <p class="muted">What you actually spent, per bike — parts, labor, service, or anything else. No prices are suggested here; every number is one you typed in. A logged service already has its own cost field — this tab is for the money around it: parts bought ahead of a job, a shop bill, or anything that is not a service entry. Expenses ride along in the per-bike history export too.</p>
+    <div class="grid">
+      <label>Bike<select id="expense-bike"></select></label>
+      <label>Category<select id="expense-category">
+        <option value="">All categories</option>
+        <option value="parts">Parts</option>
+        <option value="labor">Labor</option>
+        <option value="service">Service</option>
+        <option value="other">Other</option>
+      </select></label>
+    </div>
+    <p id="expense-total" class="card"></p>
+    <div id="expense-list"></div>
+
+    <h3>Log an expense</h3>
+    <form id="expense-form" class="card">
+      <div class="grid">
+        <label>Bike<select id="expense-form-bike" required></select></label>
+        <label>Date<input type="date" id="expense-date" required></label>
+        <label>Category<select id="expense-category-form" required>
+          <option value="parts">Parts</option>
+          <option value="labor">Labor</option>
+          <option value="service">Service</option>
+          <option value="other">Other</option>
+        </select></label>
+        <label>Cost ($)<input type="number" id="expense-cost" inputmode="decimal" min="0" step="0.01" required></label>
+        <label>What for<input type="text" id="expense-description" required placeholder="e.g. Oil + filter, shop labor"></label>
+        <label>Odometer (mi)<input type="number" id="expense-odometer" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <label>Notes<textarea id="expense-notes" rows="2" placeholder="e.g. where you bought it, invoice number"></textarea></label>
+      <button type="submit" class="primary">Log expense</button>
+    </form>
+
+    <div class="card">
+      <h3>Export this bike's expenses</h3>
+      <p class="muted">Downloads the expenses for the bike picked above — as JSON, or as readable plain text. Pick one bike first; "All bikes" exports nothing.</p>
+      <button id="expense-export-json-btn" class="primary">Download JSON (this bike)</button>
+      <button id="expense-export-text-btn" class="secondary">Download text (this bike)</button>
+      <button id="expense-copy-text-btn" class="secondary">Copy text</button>
+    </div>
   </section>
 
   <!-- DATA -->
@@ -127,6 +181,12 @@
       <label>From file<input type="file" id="import-file" accept=".json,application/json"></label>
       <label>Or paste JSON<textarea id="import-text" rows="4"></textarea></label>
       <button id="import-btn" class="primary">Import logbook</button>
+    </div>
+    <div class="card">
+      <h3>Receive a handoff</h3>
+      <p class="muted">A diagnosis sent from the Evo Diagnostic arrives as a link — tap it and this logbook opens with a confirm card. If a messaging app mangled the link, paste the handoff JSON here instead: same check, same confirm, nothing is applied until you say so.</p>
+      <label>Or paste handoff JSON<textarea id="handoff-paste-text" rows="4" placeholder='{"format":"pocket-garage-handoff","version":1,…}'></textarea></label>
+      <button id="handoff-paste-btn" class="primary">Read handoff</button>
     </div>
     <div class="card">
       <h3>Try it out</h3>
@@ -178,11 +238,13 @@
   <button class="navbtn active" data-view="due">Due</button>
   <button class="navbtn" data-view="bikes">Bikes &amp; Tasks</button>
   <button class="navbtn" data-view="history">History</button>
+  <button class="navbtn" data-view="expenses">Expenses</button>
   <button class="navbtn" data-view="data">Data</button>
   <button class="navbtn" data-view="reference">Reference</button>
 </nav>
 
 <div id="toast" class="toast" role="status"></div>
+<script src="sw-update.js"></script>
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {

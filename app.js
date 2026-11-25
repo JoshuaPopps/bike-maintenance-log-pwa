@@ -227,7 +227,7 @@ function _storage() {
 }
 
 function emptyStore() {
-  return { bikes: {}, tasks: {}, entries: [] };
+  return { bikes: {}, tasks: {}, entries: [], expenses: [] };
 }
 
 function loadStore() {
@@ -239,6 +239,8 @@ function loadStore() {
     data.bikes = data.bikes || {};
     data.tasks = data.tasks || {};
     data.entries = Array.isArray(data.entries) ? data.entries : [];
+    /* Logbooks saved before expenses existed have no key at all. */
+    data.expenses = Array.isArray(data.expenses) ? data.expenses : [];
     return data;
   } catch (e) {
     return emptyStore();
@@ -357,7 +359,11 @@ function addBike(store, fields) {
     model: fields.model || '',
     notes: fields.notes || '',
     odometer: odo,
-    odometer_date: todayISO()
+    odometer_date: todayISO(),
+    /* Pocket Garage handoff pin: the shared roster key (b1/b2/b3)
+     * this bike was confirmed as. Null until a confirmed handoff
+     * pins it — never set by a name match alone. */
+    rosterKey: fields.rosterKey || null
   };
   return store.bikes[id];
 }
@@ -369,6 +375,7 @@ function removeBike(store, bikeId) {
     if (store.tasks[tid].bike_id === bikeId) delete store.tasks[tid];
   });
   store.entries = store.entries.filter(function (e) { return e.bike_id !== bikeId; });
+  store.expenses = (store.expenses || []).filter(function (x) { return x.bike_id !== bikeId; });
 }
 
 /* Returns { warned: true } when the new reading is lower than recorded
@@ -510,6 +517,149 @@ function dueRows(store, bikeId, asOf) {
   return rows;
 }
 
+/* Due reminders: only the tasks that need attention — overdue and
+ * due-soon — surfaced on open, worst first. "ok" tasks are left out
+ * (the full list is still on the Due tab below). Read-only: it
+ * never adds, changes, or overwrites any task, factory-filled or
+ * user-set. */
+function dueReminders(store, bikeId, asOf) {
+  asOf = asOf || todayISO();
+  var rows = dueRows(store, bikeId, asOf).filter(function (row) {
+    return row.status === 'overdue' || row.status === 'due-soon';
+  });
+  var overdue = rows.filter(function (row) { return row.status === 'overdue'; });
+  var dueSoon = rows.filter(function (row) { return row.status === 'due-soon'; });
+  return {
+    rows: rows,
+    overdue: overdue,
+    dueSoon: dueSoon,
+    overdueCount: overdue.length,
+    dueSoonCount: dueSoon.length,
+    total: rows.length
+  };
+}
+
+/* Per-bike service history export (JSON shape). Completed service
+ * records for ONE bike only — its tasks and its entries, newest
+ * first, with the total spent. Plain data, no store internals, so
+ * the file reads on its own. */
+function bikeHistoryExport(store, bikeId) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Pick a bike first.');
+  var entries = historyEntries(store, bikeId, null);
+  var expenses = expensesForBike(store, bikeId, null);
+  var servicesTotal = historyTotal(entries);
+  var expensesTotal = expenseTotal(expenses);
+  return {
+    bike: {
+      name: b.name,
+      year: b.year == null ? null : b.year,
+      make: b.make || '',
+      model: b.model || '',
+      odometer: b.odometer,
+      odometer_date: b.odometer_date || null
+    },
+    exported: todayISO(),
+    service_count: entries.length,
+    total_spent: servicesTotal,
+    tasks: tasksForBike(store, bikeId).map(function (tid) {
+      var t = store.tasks[tid];
+      return {
+        name: t.name,
+        every_miles: t.every_miles == null ? null : t.every_miles,
+        every_months: t.every_months == null ? null : t.every_months,
+        notes: t.notes || ''
+      };
+    }),
+    services: entries.map(function (e) {
+      var t = store.tasks[e.task_id];
+      return {
+        date: e.date,
+        task: t ? t.name : '?',
+        odometer: e.odometer,
+        cost: e.cost == null ? null : e.cost,
+        notes: e.notes || ''
+      };
+    }),
+    /* Expenses ride along in the same per-bike history file: they are
+     * the bike's money out that is not a logged service (parts bought
+     * ahead of a job, shop labor, …). The services shape above is
+     * unchanged; expenses are their own section, newest first. */
+    expense_count: expenses.length,
+    expenses_total: expensesTotal,
+    grand_total: Math.round((servicesTotal + expensesTotal) * 100) / 100,
+    expenses: expenses.map(function (x) {
+      return {
+        date: x.date,
+        category: x.category,
+        description: x.description,
+        odometer: x.odometer == null ? null : x.odometer,
+        cost: x.cost == null ? null : x.cost,
+        notes: x.notes || ''
+      };
+    })
+  };
+}
+
+/* The same per-bike history as readable plain text — one line per
+ * service, newest first, with the bike, its tasks, and the total. */
+function bikeHistoryText(store, bikeId) {
+  var data = bikeHistoryExport(store, bikeId);
+  var b = data.bike;
+  var spec = [b.year || '', b.make || '', b.model || ''].join(' ')
+    .replace(/\s+/g, ' ').trim();
+  var lines = [];
+  lines.push('Service history — ' + b.name + (spec ? ' (' + spec + ')' : ''));
+  lines.push('Odometer: ' + fmtMiles(b.odometer) +
+    (b.odometer_date ? ' (as of ' + fmtDate(b.odometer_date) + ')' : ''));
+  lines.push('Exported: ' + fmtDate(data.exported));
+  lines.push('');
+  if (data.tasks.length) {
+    lines.push('Tasks on this bike:');
+    data.tasks.forEach(function (t) {
+      var parts = [];
+      if (t.every_miles) parts.push('every ' + Number(t.every_miles).toLocaleString('en-US') + ' mi');
+      if (t.every_months) parts.push('every ' + t.every_months + ' mo');
+      lines.push('  - ' + t.name + (parts.length ? ' (' + parts.join(' / ') + ')' : ''));
+    });
+    lines.push('');
+  }
+  if (!data.services.length) {
+    lines.push('No services logged yet for this bike.');
+  } else {
+    lines.push(data.service_count + ' service' + (data.service_count === 1 ? '' : 's') +
+      ' — total ' + fmtMoney(data.total_spent) + ':');
+    data.services.forEach(function (s) {
+      lines.push(fmtDate(s.date) + ' — ' + s.task + ' @ ' + fmtMiles(s.odometer) +
+        (s.cost != null ? ' — ' + fmtMoney(s.cost) : ''));
+      if (s.notes) lines.push('    ' + s.notes);
+    });
+  }
+  lines.push('');
+  if (!data.expenses.length) {
+    lines.push('No expenses logged yet for this bike.');
+  } else {
+    lines.push(data.expense_count + ' expense' + (data.expense_count === 1 ? '' : 's') +
+      ' — total ' + fmtMoney(data.expenses_total) + ':');
+    data.expenses.forEach(function (x) {
+      lines.push(fmtDate(x.date) + ' — ' + expenseCategoryLabel(x.category) + ' — ' + x.description +
+        (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') +
+        ' — ' + fmtMoney(x.cost));
+      if (x.notes) lines.push('    ' + x.notes);
+    });
+    lines.push('Grand total (services + expenses): ' + fmtMoney(data.grand_total));
+  }
+  return lines.join('\n') + '\n';
+}
+
+/* Download filename for a per-bike history export, slugged from the
+ * bike name: "Example 1995 Softail" -> bike-log-example-1995-softail-history.json */
+function historyExportFilename(bikeName, ext) {
+  var slug = String(bikeName || 'bike').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bike';
+  return 'bike-log-' + slug + '-history.' + ext;
+}
+
 /* Returns { warned } — same rule as the CLI: a service logged above the
  * recorded odometer advances it; below it warns and never rewinds. */
 function logService(store, fields) {
@@ -556,6 +706,178 @@ function historyTotal(list) {
   return Math.round(total * 100) / 100;
 }
 
+/* ------------------------------------------------------------------ */
+/* Expenses — money out, per bike. User-entered only: the app never  */
+/* invents a part price or a labor rate, and never shows a "typical  */
+/* shop cost". An expense is what Joshua actually spent, in one of   */
+/* four buckets (parts / labor / service / other). It is NOT a       */
+/* service entry: buying parts ahead of a job, paying a shop, or    */
+/* any other spend that is not a logged service goes here. Service  */
+/* entries keep their own cost field for what that job cost.        */
+/* ------------------------------------------------------------------ */
+var EXPENSE_CATEGORIES = ['parts', 'labor', 'service', 'other'];
+
+function expenseCategoryLabel(cat) {
+  if (cat === 'parts') return 'Parts';
+  if (cat === 'labor') return 'Labor';
+  if (cat === 'service') return 'Service';
+  return 'Other';
+}
+
+/* Next id from the highest numeric suffix in use — same rule as
+ * entries, so ids stay stable and predictable. */
+function nextExpenseId(expenses) {
+  var max = 0;
+  expenses.forEach(function (x) {
+    var m = /^x(\d+)$/.exec(x.id || '');
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  });
+  return 'x' + (max + 1);
+}
+
+function addExpense(store, fields) {
+  var b = store.bikes[fields.bike_id];
+  if (!b) throw new Error('Pick a bike first.');
+  var description = fields.description == null ? '' : String(fields.description).trim();
+  if (!description) throw new Error('Say what the money was for.');
+  var date = fields.date || todayISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD.');
+  var category = fields.category == null || fields.category === ''
+    ? 'other' : String(fields.category);
+  if (EXPENSE_CATEGORIES.indexOf(category) === -1)
+    throw new Error('Unknown expense category: ' + category + '.');
+  if (fields.cost === '' || fields.cost == null)
+    throw new Error('Cost is required — enter what you actually spent.');
+  var cost = Number(fields.cost);
+  if (isNaN(cost) || cost < 0) throw new Error('Cost cannot be negative.');
+  var odo = fields.odometer === '' || fields.odometer == null
+    ? null : Number(fields.odometer);
+  if (odo != null && (isNaN(odo) || odo < 0)) throw new Error('Odometer must be zero or more.');
+  var expense = {
+    id: nextExpenseId(store.expenses || []),
+    bike_id: fields.bike_id,
+    date: date,
+    category: category,
+    description: description,
+    cost: Math.round(cost * 100) / 100,
+    odometer: odo,
+    notes: fields.notes || ''
+  };
+  store.expenses.push(expense);
+  return expense;
+}
+
+function removeExpense(store, expenseId) {
+  var found = (store.expenses || []).some(function (x) { return x.id === expenseId; });
+  if (!found) throw new Error('Expense not found.');
+  store.expenses = store.expenses.filter(function (x) { return x.id !== expenseId; });
+}
+
+/* Expenses for one bike (or all bikes when bikeId is null),
+ * optionally filtered to one category, newest first. */
+function expensesForBike(store, bikeId, category) {
+  var list = (store.expenses || []).slice();
+  if (bikeId) list = list.filter(function (x) { return x.bike_id === bikeId; });
+  if (category) list = list.filter(function (x) { return x.category === category; });
+  list.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    var na = parseInt((/^x(\d+)$/.exec(a.id || '') || [0, 0])[1], 10);
+    var nb = parseInt((/^x(\d+)$/.exec(b.id || '') || [0, 0])[1], 10);
+    return nb - na;
+  });
+  return list;
+}
+
+function expenseTotal(list) {
+  var total = 0;
+  list.forEach(function (x) { if (x.cost != null) total += x.cost; });
+  return Math.round(total * 100) / 100;
+}
+
+/* Total spent per category over a list of expenses. */
+function expensesByCategory(list) {
+  var out = { parts: 0, labor: 0, service: 0, other: 0 };
+  list.forEach(function (x) {
+    if (x.cost == null) return;
+    if (out[x.category] == null) out[x.category] = 0;
+    out[x.category] = Math.round((out[x.category] + x.cost) * 100) / 100;
+  });
+  return out;
+}
+
+/* Per-bike expenses export (JSON shape) — the expenses-only file the
+ * Expenses tab downloads. Same one-bike-at-a-time rule as the
+ * service history export. */
+function bikeExpensesExport(store, bikeId) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Pick a bike first.');
+  var expenses = expensesForBike(store, bikeId, null);
+  return {
+    bike: {
+      name: b.name,
+      year: b.year == null ? null : b.year,
+      make: b.make || '',
+      model: b.model || '',
+      odometer: b.odometer,
+      odometer_date: b.odometer_date || null
+    },
+    exported: todayISO(),
+    expense_count: expenses.length,
+    total_spent: expenseTotal(expenses),
+    by_category: expensesByCategory(expenses),
+    expenses: expenses.map(function (x) {
+      return {
+        date: x.date,
+        category: x.category,
+        description: x.description,
+        odometer: x.odometer == null ? null : x.odometer,
+        cost: x.cost == null ? null : x.cost,
+        notes: x.notes || ''
+      };
+    })
+  };
+}
+
+/* The same per-bike expenses as readable plain text. */
+function bikeExpensesText(store, bikeId) {
+  var data = bikeExpensesExport(store, bikeId);
+  var b = data.bike;
+  var spec = [b.year || '', b.make || '', b.model || ''].join(' ')
+    .replace(/\s+/g, ' ').trim();
+  var lines = [];
+  lines.push('Expenses — ' + b.name + (spec ? ' (' + spec + ')' : ''));
+  lines.push('Odometer: ' + fmtMiles(b.odometer) +
+    (b.odometer_date ? ' (as of ' + fmtDate(b.odometer_date) + ')' : ''));
+  lines.push('Exported: ' + fmtDate(data.exported));
+  lines.push('');
+  if (!data.expenses.length) {
+    lines.push('No expenses logged yet for this bike.');
+  } else {
+    lines.push(data.expense_count + ' expense' + (data.expense_count === 1 ? '' : 's') +
+      ' — total ' + fmtMoney(data.total_spent) + ':');
+    EXPENSE_CATEGORIES.forEach(function (cat) {
+      if (data.by_category[cat]) {
+        lines.push('  ' + expenseCategoryLabel(cat) + ': ' + fmtMoney(data.by_category[cat]));
+      }
+    });
+    data.expenses.forEach(function (x) {
+      lines.push(fmtDate(x.date) + ' — ' + expenseCategoryLabel(x.category) + ' — ' + x.description +
+        (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') +
+        ' — ' + fmtMoney(x.cost));
+      if (x.notes) lines.push('    ' + x.notes);
+    });
+  }
+  return lines.join('\n') + '\n';
+}
+
+/* Download filename for a per-bike expenses export, slugged from the
+ * bike name: "Example 1995 Softail" -> bike-log-example-1995-softail-expenses.json */
+function expenseExportFilename(bikeName, ext) {
+  var slug = String(bikeName || 'bike').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bike';
+  return 'bike-log-' + slug + '-expenses.' + ext;
+}
+
 /* Validate an imported logbook (CLI data.json shape). Throws on garbage
  * or on entries pointing at bikes/tasks that are not in the file. */
 function validateImport(data) {
@@ -583,7 +905,21 @@ function validateImport(data) {
     if (!data.tasks[e.task_id])
       throw new Error('Entry #' + (i + 1) + ' points at a missing task.');
   });
-  return { bikes: data.bikes, tasks: data.tasks, entries: data.entries };
+  /* Expenses are this app's own key — the CLI's data.json never has
+   * one, so a missing key is an old logbook, not an error. When
+   * present it must be a list of expenses on bikes in the file. */
+  var expenses = Array.isArray(data.expenses) ? data.expenses : [];
+  expenses.forEach(function (x, i) {
+    if (!x || typeof x !== 'object')
+      throw new Error('Expense #' + (i + 1) + ' is not an object.');
+    if (!data.bikes[x.bike_id])
+      throw new Error('Expense #' + (i + 1) + ' points at a missing bike.');
+    if (x.category != null && EXPENSE_CATEGORIES.indexOf(x.category) === -1)
+      throw new Error('Expense #' + (i + 1) + ' has an unknown category.');
+    if (x.cost != null && (isNaN(Number(x.cost)) || Number(x.cost) < 0))
+      throw new Error('Expense #' + (i + 1) + ' has a bad cost.');
+  });
+  return { bikes: data.bikes, tasks: data.tasks, entries: data.entries, expenses: expenses };
 }
 
 /* Example logbook — dates relative to today so the OVERDUE / DUE SOON /
@@ -653,11 +989,170 @@ function mergeSample(store, sample) {
     copy.task_id = taskMap[e.task_id] || e.task_id;
     store.entries.push(copy);
   });
+  (sample.expenses || []).forEach(function (x) {
+    var copy = {};
+    Object.keys(x).forEach(function (k) { copy[k] = x[k]; });
+    copy.id = nextExpenseId(store.expenses || []);
+    copy.bike_id = bikeMap[x.bike_id] || x.bike_id;
+    store.expenses.push(copy);
+  });
   return { bikes: Object.keys(bikeMap).length, tasks: Object.keys(taskMap).length };
 }
+/* ------------------------------------------------------------------ */
+/* Pocket Garage handoff (receiving side) — see HANDOFF-FORMAT.md.    */
+/* This app accepts kind "diagnosis-to-task" only, delivered as a     */
+/* ?handoff=<base64url(JSON)> URL parameter (or pasted JSON on the    */
+/* Data tab). The payload is validated, the bike is resolved by       */
+/* roster key first / name match second, and NOTHING is written until */
+/* the user confirms on the card. A diagnosis carries no service      */
+/* interval, so a new task asks the user for one — it is never        */
+/* invented. If the task already exists, no duplicate is made: the    */
+/* confirm pre-fills the log-service form for it instead.             */
+/* ------------------------------------------------------------------ */
+var HANDOFF_FORMAT = 'pocket-garage-handoff';
+var HANDOFF_VERSION = 1;
+var HANDOFF_KIND = 'diagnosis-to-task';
+var HANDOFF_MAX_CHARS = 8000;
+
+function b64urlEncode(str) {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(str, 'utf8').toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  return btoa(unescape(encodeURIComponent(str)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  var s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  if (typeof Buffer !== 'undefined') return Buffer.from(s, 'base64').toString('utf8');
+  return decodeURIComponent(escape(atob(s)));
+}
+function encodePocketHandoff(obj) {
+  return b64urlEncode(JSON.stringify(obj));
+}
+function handoffIsNonEmptyString(v) { return typeof v === 'string' && v.trim().length > 0; }
+
+function validatePocketHandoff(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('That link is not a Pocket Garage handoff.');
+  if (obj.format !== HANDOFF_FORMAT) throw new Error('That link is not a Pocket Garage handoff (wrong format).');
+  if (obj.version !== HANDOFF_VERSION) throw new Error('That handoff is version ' + obj.version + ' — this app only takes version ' + HANDOFF_VERSION + '.');
+  if (obj.kind !== HANDOFF_KIND) throw new Error('This app takes diagnosis handoffs, not "' + obj.kind + '".');
+  if (!handoffIsNonEmptyString(obj.sentAt) || isNaN(Date.parse(obj.sentAt))) throw new Error('That handoff has no usable sent date.');
+  if (!handoffIsNonEmptyString(obj.from)) throw new Error('That handoff does not say which app sent it.');
+  if (!obj.bike || !handoffIsNonEmptyString(obj.bike.rosterKey)) throw new Error('That handoff does not say which bike it is for.');
+  if (!handoffIsNonEmptyString(obj.bike.name)) throw new Error('That handoff has no bike name.');
+  var p = obj.payload;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('That handoff has no diagnosis in it.');
+  ['treeId', 'treeTitle', 'topCause', 'cause', 'test', 'fix', 'urgency', 'safeToRide', 'suggestedTaskName'].forEach(function (k) {
+    if (!handoffIsNonEmptyString(p[k])) throw new Error('That handoff is missing "' + k + '".');
+  });
+  if (['low', 'medium', 'high', 'critical'].indexOf(p.urgency) === -1) throw new Error('That handoff has an unknown urgency: ' + p.urgency + '.');
+  if (p.suggestedTaskName.trim().length > 80) throw new Error('That handoff\'s suggested task name is too long (max 80 characters).');
+  return {
+    format: obj.format, version: obj.version, kind: obj.kind,
+    sentAt: obj.sentAt, from: obj.from,
+    bike: { rosterKey: obj.bike.rosterKey.trim(), name: obj.bike.name.trim() },
+    payload: {
+      treeId: p.treeId, treeTitle: p.treeTitle, topCause: p.topCause,
+      cause: p.cause, test: p.test, fix: p.fix, urgency: p.urgency,
+      safeToRide: p.safeToRide,
+      suggestedTaskName: p.suggestedTaskName.trim()
+    }
+  };
+}
+
+function parsePocketHandoff(text) {
+  if (text == null) throw new Error('Nothing to read — no handoff there.');
+  var raw = String(text).trim();
+  if (!raw) throw new Error('Nothing to read — no handoff there.');
+  if (raw.length > HANDOFF_MAX_CHARS * 2) throw new Error('That handoff is too big — handoffs are one record at a time.');
+  var json;
+  try {
+    json = raw.charAt(0) === '{' ? raw : b64urlDecode(raw);
+  } catch (e) {
+    throw new Error('That link is not a readable handoff — the code in it is garbled.');
+  }
+  if (json.length > HANDOFF_MAX_CHARS) throw new Error('That handoff is too big — handoffs are one record at a time.');
+  var obj;
+  try { obj = JSON.parse(json); } catch (e) { throw new Error('That link is not a Pocket Garage handoff (not JSON).'); }
+  return validatePocketHandoff(obj);
+}
+
+function normalizeBikeName(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function namesMatch(a, b) {
+  var na = normalizeBikeName(a), nb = normalizeBikeName(b);
+  if (na.length < 4 || nb.length < 4) return false;
+  return na.indexOf(nb) !== -1 || nb.indexOf(na) !== -1;
+}
+
+function resolvePocketHandoffBike(store, handoff) {
+  var key = handoff.bike.rosterKey;
+  var ids = Object.keys(store.bikes);
+  var i, b;
+  for (i = 0; i < ids.length; i++) {
+    b = store.bikes[ids[i]];
+    /* Bikes here carry no id field of their own — the key IS the id,
+     * so the resolution returns it explicitly. */
+    if (b.rosterKey && b.rosterKey === key) return { status: 'matched', via: 'roster', bike: b, bikeId: ids[i] };
+  }
+  var hits = ids.filter(function (id) { return namesMatch(store.bikes[id].name, handoff.bike.name); });
+  if (hits.length === 1) return { status: 'matched', via: 'name', bike: store.bikes[hits[0]], bikeId: hits[0] };
+  return { status: 'unknown', via: null, bike: null, candidates: hits.length };
+}
+
+function pinPocketRosterKey(store, rosterKey, bikeId) {
+  var bike = store.bikes[bikeId];
+  if (!bike) throw new Error('Bike not found.');
+  var clash = Object.keys(store.bikes).some(function (id) {
+    return id !== bikeId && store.bikes[id].rosterKey === rosterKey;
+  });
+  if (clash) throw new Error('That roster key already belongs to another bike in this logbook.');
+  bike.rosterKey = rosterKey;
+  return bike;
+}
+
+/* The citation written into a task's notes (and into the log-service
+ * notes when the fix is logged). Verbatim from the diagnosis. */
+function handoffCitation(handoff) {
+  var p = handoff.payload;
+  var date = '';
+  try { date = new Date(handoff.sentAt).toISOString().slice(0, 10); } catch (e) { date = handoff.sentAt; }
+  return 'From the Evo Diagnostic, ' + date + ': ' + p.treeTitle + ' — ' + p.topCause +
+    '. Test: ' + p.test + '. Fix: ' + p.fix + '. Safe to ride: ' + p.safeToRide + '.';
+}
+
+/* Work out what confirming this handoff does on this bike — WITHOUT
+ * writing anything. Returns { name, notes, existingTaskId } where
+ * existingTaskId is set when a task with that name is already on the
+ * bike (case-insensitive): then no duplicate is created and the
+ * confirm pre-fills the log-service form for that task instead. */
+function taskFromHandoff(store, handoff, bikeId, nameOverride) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Pick a bike first.');
+  var name = nameOverride && nameOverride.trim() ? nameOverride.trim() : handoff.payload.suggestedTaskName;
+  var existingId = null;
+  Object.keys(store.tasks).forEach(function (tid) {
+    var t = store.tasks[tid];
+    if (t.bike_id === bikeId && t.name.toLowerCase() === name.toLowerCase()) existingId = tid;
+  });
+  return { name: name, notes: handoffCitation(handoff), existingTaskId: existingId };
+}
+
 if (typeof document !== 'undefined') {
   var store = loadStore();
+  /* Service-worker update button (sw-update.js): hidden until a new
+   * version is waiting. Lives in the header — the bottom nav is fixed
+   * and would cover a body-end button. Guarded so the logbook keeps
+   * working if the module ever fails to load. */
+  var swUpdate = (typeof PG_SWUpdate !== 'undefined')
+    ? PG_SWUpdate.init({ container: document.querySelector('header.top') }) : null;
   var toastTimer = null;
+  /* A validated handoff waiting on the user's confirm. In memory
+   * only — never persisted, never applied without a tap. */
+  var pendingHandoff = null;
 
   function toast(msg, isError) {
     var el = document.getElementById('toast');
@@ -688,7 +1183,8 @@ if (typeof document !== 'undefined') {
       return '<option value="' + esc(id) + '">' + esc(bikeLabel(store.bikes[id])) + '</option>';
     }).join('');
     [['due-bike', true], ['log-bike', false], ['odo-bike', false],
-     ['task-bike', false], ['history-bike', true]].forEach(function (pair) {
+     ['task-bike', false], ['history-bike', true],
+     ['expense-bike', true], ['expense-form-bike', false]].forEach(function (pair) {
       var el = document.getElementById(pair[0]);
       if (!el) return;
       var keep = el.value;
@@ -721,6 +1217,63 @@ if (typeof document !== 'undefined') {
     var keepHist = histTask.value;
     histTask.innerHTML = optsFor(histBike, true);
     if (keepHist && store.tasks[keepHist]) histTask.value = keepHist;
+  }
+
+  /* Shared by the reminders card and the full Due list: a Log button
+   * pre-fills the service form for that bike + task. */
+  function wireLogButtons(box) {
+    box.querySelectorAll('[data-log-task]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.getElementById('log-bike').value = btn.getAttribute('data-log-bike');
+        fillTaskSelects();
+        document.getElementById('log-task').value = btn.getAttribute('data-log-task');
+        document.getElementById('log-date').value = todayISO();
+        var b = store.bikes[btn.getAttribute('data-log-bike')];
+        document.getElementById('log-odometer').value = b ? Math.round(b.odometer) : '';
+        document.querySelector('[data-view="due"]').scrollIntoView();
+        document.getElementById('log-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('log-notes').focus();
+      });
+    });
+  }
+
+  /* Reminders, shown at the top of the Due tab on open: only the
+   * overdue and due-soon tasks, worst first, with the counts up
+   * front. The full list (including ok tasks) is still below. */
+  function renderReminders() {
+    var box = document.getElementById('reminders');
+    if (!box) return;
+    if (!Object.keys(store.bikes).length) {
+      box.innerHTML = '';
+      return;
+    }
+    var bikeId = document.getElementById('due-bike').value || null;
+    var rem = dueReminders(store, bikeId, todayISO());
+    if (!rem.total) {
+      box.innerHTML = '<div class="card reminders"><h3>Reminders</h3>' +
+        '<p><span class="badge ok">all caught up</span> Nothing overdue or due soon.</p></div>';
+      return;
+    }
+    var html = '<div class="card reminders' + (rem.overdueCount ? ' attention' : '') + '"><h3>Reminders</h3>' +
+      '<p>' +
+      (rem.overdueCount ? '<span class="badge overdue">' + rem.overdueCount + ' overdue</span> ' : '') +
+      (rem.dueSoonCount ? '<span class="badge soon">' + rem.dueSoonCount + ' due soon</span>' : '') +
+      '</p>';
+    rem.rows.forEach(function (row) {
+      var b = store.bikes[row.bike_id];
+      var t = store.tasks[row.task_id];
+      html += '<div class="taskrow">' + statusBadge(row.status) + ' <b>' + esc(t.name) + '</b>' +
+        ' <span class="muted">on ' + esc(b.name) + ' (' + esc(intervalLabel(t)) + ')</span>' +
+        ' <button class="mini secondary" data-log-bike="' + esc(row.bike_id) +
+        '" data-log-task="' + esc(row.task_id) + '">Log</button>';
+      row.details.forEach(function (d) {
+        html += '<div class="detail">' + esc(d) + '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+    wireLogButtons(box);
   }
 
   function renderDue() {
@@ -757,19 +1310,7 @@ if (typeof document !== 'undefined') {
     });
     html += '</div>';
     box.innerHTML = html;
-    box.querySelectorAll('[data-log-task]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        document.getElementById('log-bike').value = btn.getAttribute('data-log-bike');
-        fillTaskSelects();
-        document.getElementById('log-task').value = btn.getAttribute('data-log-task');
-        document.getElementById('log-date').value = todayISO();
-        var b = store.bikes[btn.getAttribute('data-log-bike')];
-        document.getElementById('log-odometer').value = b ? Math.round(b.odometer) : '';
-        document.querySelector('[data-view="due"]').scrollIntoView();
-        document.getElementById('log-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        document.getElementById('log-notes').focus();
-      });
-    });
+    wireLogButtons(box);
   }
 
   function renderBikes() {
@@ -856,24 +1397,232 @@ if (typeof document !== 'undefined') {
     document.getElementById('history-list').innerHTML = html;
   }
 
+  function renderExpenses() {
+    var bikeId = document.getElementById('expense-bike').value || null;
+    var category = document.getElementById('expense-category').value || null;
+    var list = expensesForBike(store, bikeId, category);
+    var totalEl = document.getElementById('expense-total');
+    var allForBike = expensesForBike(store, bikeId, null);
+    var total = expenseTotal(allForBike);
+    var byCat = expensesByCategory(allForBike);
+    var catParts = [];
+    EXPENSE_CATEGORIES.forEach(function (cat) {
+      if (byCat[cat]) catParts.push(expenseCategoryLabel(cat) + ' ' + fmtMoney(byCat[cat]));
+    });
+    if (!Object.keys(store.bikes).length) {
+      totalEl.textContent = 'No bikes yet — add one on the Bikes & Tasks tab.';
+      document.getElementById('expense-list').innerHTML = '';
+      return;
+    }
+    totalEl.innerHTML = allForBike.length + ' expense' + (allForBike.length === 1 ? '' : 's') +
+      (total ? ' — total ' + fmtMoney(total) : ' — nothing spent yet') +
+      (catParts.length ? ' <span class="muted">(' + esc(catParts.join(' · ')) + ')</span>' : '');
+    if (!list.length) {
+      document.getElementById('expense-list').innerHTML =
+        '<p class="card">No expenses match — log one below.</p>';
+      return;
+    }
+    var html = '<div class="card">';
+    list.forEach(function (x) {
+      var b = store.bikes[x.bike_id];
+      html += '<div class="entry"><header><b>' + fmtDate(x.date) + '</b> — ' +
+        esc(expenseCategoryLabel(x.category)) + ' — ' + esc(x.description) +
+        ' — ' + fmtMoney(x.cost) + '</header>' +
+        '<div class="detail">' + esc(b ? b.name : '?') +
+        (x.odometer != null ? ' @ ' + fmtMiles(x.odometer) : '') + '</div>';
+      if (x.notes) html += '<div class="detail">' + esc(x.notes) + '</div>';
+      html += '<button class="mini danger" data-del-expense="' + esc(x.id) + '">Delete</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+    var box = document.getElementById('expense-list');
+    box.innerHTML = html;
+    box.querySelectorAll('[data-del-expense]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var xid = btn.getAttribute('data-del-expense');
+        var x = (store.expenses || []).filter(function (e) { return e.id === xid; })[0];
+        if (!x) return;
+        if (!window.confirm('Delete this expense — ' + x.description + ' (' + fmtMoney(x.cost) + ')?')) return;
+        removeExpense(store, xid);
+        saveStore(store);
+        renderAll();
+        toast('Expense deleted.');
+      });
+    });
+  }
+
   function renderData() {
     var bikes = Object.keys(store.bikes).length;
     var tasks = Object.keys(store.tasks).length;
     var entries = store.entries.length;
     var spent = historyTotal(store.entries);
+    var expenses = (store.expenses || []).length;
+    var expenseSpent = expenseTotal(store.expenses || []);
     document.getElementById('data-counts').textContent =
       bikes + ' bike' + (bikes === 1 ? '' : 's') + ', ' +
       tasks + ' task' + (tasks === 1 ? '' : 's') + ', ' +
       entries + ' service' + (entries === 1 ? '' : 's') + ' logged' +
-      (spent ? ', ' + fmtMoney(spent) + ' total spent' : '') + '.';
+      (spent ? ', ' + fmtMoney(spent) + ' total spent' : '') +
+      (expenses ? ', ' + expenses + ' expense' + (expenses === 1 ? '' : 's') +
+        ' logged (' + fmtMoney(expenseSpent) + ')' : '') + '.';
   }
 
   function renderAll() {
     fillBikeSelects();
+    renderReminders();
     renderDue();
     renderBikes();
     renderHistory();
+    renderExpenses();
     renderData();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Handoff UI — confirm card + URL / paste intake. Nothing is      */
+  /* written until the user taps confirm.                             */
+  /* ---------------------------------------------------------------- */
+  function handoffSentDate(handoff) {
+    try {
+      var iso = new Date(handoff.sentAt).toISOString().slice(0, 10);
+      return fmtDate(iso);
+    } catch (e) { return handoff.sentAt; }
+  }
+
+  function renderHandoffBox() {
+    var box = document.getElementById('handoff-box');
+    if (!box) return;
+    if (!pendingHandoff) { box.innerHTML = ''; return; }
+    if (pendingHandoff.error) {
+      box.innerHTML = '<div class="card"><h3>Handoff could not be read</h3>' +
+        '<p>' + esc(pendingHandoff.error) + '</p>' +
+        '<p class="muted">Nothing was changed. Ask the sending app for a fresh link.</p>' +
+        '<button type="button" class="secondary" data-handoff-dismiss>Dismiss</button></div>';
+      return;
+    }
+    var handoff = pendingHandoff.handoff;
+    var p = handoff.payload;
+    var res = pendingHandoff.resolution;
+    var html = '<div class="card"><h3>Diagnosis arrived — from the Evo Diagnostic</h3>' +
+      '<p><b>' + esc(p.topCause) + '</b></p>' +
+      '<p>' + esc(p.treeTitle) + ' · sent ' + esc(handoffSentDate(handoff)) + '</p>' +
+      '<p><b>Test:</b> ' + esc(p.test) + '</p>' +
+      '<p><b>Fix:</b> ' + esc(p.fix) + '</p>' +
+      '<p><b>Safe to ride?</b> ' + esc(p.safeToRide) + '</p>';
+    var bikeId = null, draft = null;
+    if (res.status === 'matched') {
+      bikeId = res.bikeId;
+      html += '<p><b>For:</b> ' + esc(res.bike.name) + ' <span class="muted">(matched by ' +
+        (res.via === 'roster' ? 'roster key ' + esc(handoff.bike.rosterKey) : 'name') + ')</span></p>';
+      draft = taskFromHandoff(store, handoff, bikeId);
+    } else {
+      var bikeIds = Object.keys(store.bikes).sort(function (a, b) {
+        return store.bikes[a].name.localeCompare(store.bikes[b].name);
+      });
+      if (!bikeIds.length) {
+        html += '<p class="muted">No bikes in this logbook yet — add the bike under Bikes &amp; Tasks first, then open the link again.</p>';
+        box.innerHTML = html + '<button type="button" class="secondary" data-handoff-dismiss>Dismiss</button></div>';
+        return;
+      }
+      html += '<p class="muted">This diagnosis is for "' + esc(handoff.bike.name) + '" — no bike here matches it yet. Which bike is it for?</p>' +
+        '<label>Bike<select id="handoff-bike">' +
+        bikeIds.map(function (id) {
+          return '<option value="' + esc(id) + '">' + esc(bikeLabel(store.bikes[id])) + '</option>';
+        }).join('') + '</select></label>' +
+        '<p class="muted">Picking a bike pins it to roster key ' + esc(handoff.bike.rosterKey) + ', so the next handoff for this bike lands without asking.</p>';
+    }
+    html += '<label>Task name<input type="text" id="handoff-task-name" value="' + esc(p.suggestedTaskName) + '" maxlength="80"></label>';
+    if (draft && draft.existingTaskId) {
+      html += '<p><b>A task called "' + esc(draft.name) + '" is already on this bike</b> — confirming will not add a duplicate. It pre-fills the log-service form for that task instead, so you can log the fix when it is done.</p>';
+    } else {
+      html += '<p class="muted">A diagnosis carries no service interval, so set one — miles or months, at least one — or this task has no due date. (Only needed for a new task.)</p>' +
+        '<div class="grid"><label>Every (miles)<input type="number" id="handoff-miles" inputmode="numeric" min="1" step="1" placeholder="e.g. 5000"></label>' +
+        '<label>Every (months)<input type="number" id="handoff-months" inputmode="numeric" min="1" step="1" placeholder="e.g. 6"></label></div>';
+    }
+    html += '<button type="button" class="primary" data-handoff-confirm>' +
+      (draft && draft.existingTaskId ? 'Log a service for this task' : 'Add task') + '</button> ' +
+      '<button type="button" class="secondary" data-handoff-dismiss>Dismiss — do nothing</button></div>';
+    box.innerHTML = html;
+  }
+
+  function receiveHandoff(text) {
+    try {
+      var handoff = parsePocketHandoff(text);
+      pendingHandoff = { handoff: handoff, resolution: resolvePocketHandoffBike(store, handoff), error: null };
+      renderHandoffBox();
+    } catch (err) {
+      pendingHandoff = { handoff: null, resolution: null, error: err.message };
+      renderHandoffBox();
+    }
+  }
+
+  function checkHandoffFromUrl() {
+    var raw = null;
+    try { raw = new URLSearchParams(window.location.search).get('handoff'); } catch (e) { return; }
+    if (!raw) return;
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) { /* harmless */ }
+    receiveHandoff(raw);
+  }
+
+  function prefillLogForm(bikeId, taskId, notes) {
+    document.getElementById('log-bike').value = bikeId;
+    fillTaskSelects();
+    document.getElementById('log-task').value = taskId;
+    document.getElementById('log-date').value = todayISO();
+    var b = store.bikes[bikeId];
+    document.getElementById('log-odometer').value = b ? Math.round(b.odometer) : '';
+    var notesEl = document.getElementById('log-notes');
+    if (notesEl && !notesEl.value) notesEl.value = notes;
+    document.getElementById('log-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (notesEl) notesEl.focus();
+  }
+
+  function confirmHandoff() {
+    if (!pendingHandoff || !pendingHandoff.handoff) return;
+    var handoff = pendingHandoff.handoff;
+    var bikeId = null;
+    if (pendingHandoff.resolution && pendingHandoff.resolution.status === 'matched') {
+      bikeId = pendingHandoff.resolution.bikeId;
+    } else {
+      var sel = document.getElementById('handoff-bike');
+      bikeId = sel ? sel.value : null;
+    }
+    if (!bikeId || !store.bikes[bikeId]) { toast('Pick which bike this diagnosis is for.', true); return; }
+    var nameEl = document.getElementById('handoff-task-name');
+    var name = nameEl ? nameEl.value.trim() : handoff.payload.suggestedTaskName;
+    if (!name) { toast('Give the task a name.', true); return; }
+    var draft;
+    try { draft = taskFromHandoff(store, handoff, bikeId, name); }
+    catch (err) { toast(err.message, true); return; }
+    var milesEl = document.getElementById('handoff-miles');
+    var monthsEl = document.getElementById('handoff-months');
+    var miles = milesEl ? milesEl.value : '';
+    var months = monthsEl ? monthsEl.value : '';
+    if (!draft.existingTaskId && (!miles && !months)) {
+      toast('Give the task an interval — miles or months — or it has no due date.', true);
+      return;
+    }
+    var taskId = draft.existingTaskId;
+    try {
+      pinPocketRosterKey(store, handoff.bike.rosterKey, bikeId);
+      if (!taskId) {
+        addTask(store, {
+          bike_id: bikeId, name: draft.name,
+          every_miles: miles, every_months: months, notes: draft.notes
+        });
+        taskId = Object.keys(store.tasks).filter(function (tid) {
+          var t = store.tasks[tid];
+          return t.bike_id === bikeId && t.name.toLowerCase() === draft.name.toLowerCase();
+        })[0];
+      }
+      saveStore(store);
+    } catch (err) { toast(err.message, true); return; }
+    pendingHandoff = null;
+    renderAll();
+    renderHandoffBox();
+    prefillLogForm(bikeId, taskId, draft.notes);
+    toast(draft.existingTaskId
+      ? 'That task is already on this bike — the log form is pre-filled for it.'
+      : 'Task added — the log form is pre-filled so you can log the fix when it is done.');
   }
 
   function showView(name) {
@@ -888,13 +1637,18 @@ if (typeof document !== 'undefined') {
     btn.addEventListener('click', function () { showView(btn.getAttribute('data-view')); });
   });
 
-  document.getElementById('due-bike').addEventListener('change', renderDue);
+  document.getElementById('due-bike').addEventListener('change', function () {
+    renderReminders();
+    renderDue();
+  });
   document.getElementById('log-bike').addEventListener('change', fillTaskSelects);
   document.getElementById('history-bike').addEventListener('change', function () {
     fillTaskSelects();
     renderHistory();
   });
   document.getElementById('history-task').addEventListener('change', renderHistory);
+  document.getElementById('expense-bike').addEventListener('change', renderExpenses);
+  document.getElementById('expense-category').addEventListener('change', renderExpenses);
 
   document.getElementById('log-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -1081,14 +1835,120 @@ if (typeof document !== 'undefined') {
     return JSON.stringify(store, null, 2) + '\n';
   }
 
-  document.getElementById('export-btn').addEventListener('click', function () {
-    var blob = new Blob([exportJSON()], { type: 'application/json' });
+  function downloadFile(filename, text, mime) {
+    var blob = new Blob([text], { type: mime });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'bike-log-data.json';
+    a.download = filename;
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  document.getElementById('export-btn').addEventListener('click', function () {
+    downloadFile('bike-log-data.json', exportJSON(), 'application/json');
     toast('Backup downloaded.');
+  });
+
+  /* Per-bike service history export: the bike picked in the History
+   * filter above. "All bikes" is not one bike — pick one first. */
+  function historyExportBike() {
+    var bikeId = document.getElementById('history-bike').value || null;
+    if (!bikeId) { toast('Pick a bike first — history export is one bike at a time.', true); return null; }
+    return bikeId;
+  }
+
+  document.getElementById('history-export-json-btn').addEventListener('click', function () {
+    var bikeId = historyExportBike();
+    if (!bikeId) return;
+    var data = bikeHistoryExport(store, bikeId);
+    downloadFile(historyExportFilename(data.bike.name, 'json'),
+      JSON.stringify(data, null, 2) + '\n', 'application/json');
+    toast(data.service_count
+      ? 'History downloaded — ' + data.service_count + ' services for ' + data.bike.name + '.'
+      : 'History downloaded — no services logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('history-export-text-btn').addEventListener('click', function () {
+    var bikeId = historyExportBike();
+    if (!bikeId) return;
+    var data = bikeHistoryExport(store, bikeId);
+    downloadFile(historyExportFilename(data.bike.name, 'txt'),
+      bikeHistoryText(store, bikeId), 'text/plain');
+    toast(data.service_count
+      ? 'History downloaded — ' + data.service_count + ' services for ' + data.bike.name + '.'
+      : 'History downloaded — no services logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('history-copy-text-btn').addEventListener('click', function () {
+    var bikeId = historyExportBike();
+    if (!bikeId) return;
+    var done = function () { toast('History copied to clipboard.'); };
+    var fail = function () { toast('Copy failed — use Download instead.', true); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(bikeHistoryText(store, bikeId)).then(done, fail);
+    } else { fail(); }
+  });
+
+  /* Per-bike expenses export: the bike picked in the Expenses
+   * filter above. "All bikes" is not one bike — pick one first. */
+  function expenseExportBike() {
+    var bikeId = document.getElementById('expense-bike').value || null;
+    if (!bikeId) { toast('Pick a bike first — expenses export is one bike at a time.', true); return null; }
+    return bikeId;
+  }
+
+  document.getElementById('expense-export-json-btn').addEventListener('click', function () {
+    var bikeId = expenseExportBike();
+    if (!bikeId) return;
+    var data = bikeExpensesExport(store, bikeId);
+    downloadFile(expenseExportFilename(data.bike.name, 'json'),
+      JSON.stringify(data, null, 2) + '\n', 'application/json');
+    toast(data.expense_count
+      ? 'Expenses downloaded — ' + data.expense_count + ' expenses for ' + data.bike.name + '.'
+      : 'Expenses downloaded — no expenses logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('expense-export-text-btn').addEventListener('click', function () {
+    var bikeId = expenseExportBike();
+    if (!bikeId) return;
+    var data = bikeExpensesExport(store, bikeId);
+    downloadFile(expenseExportFilename(data.bike.name, 'txt'),
+      bikeExpensesText(store, bikeId), 'text/plain');
+    toast(data.expense_count
+      ? 'Expenses downloaded — ' + data.expense_count + ' expenses for ' + data.bike.name + '.'
+      : 'Expenses downloaded — no expenses logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('expense-copy-text-btn').addEventListener('click', function () {
+    var bikeId = expenseExportBike();
+    if (!bikeId) return;
+    var done = function () { toast('Expenses copied to clipboard.'); };
+    var fail = function () { toast('Copy failed — use Download instead.', true); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(bikeExpensesText(store, bikeId)).then(done, fail);
+    } else { fail(); }
+  });
+
+  document.getElementById('expense-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    try {
+      addExpense(store, {
+        bike_id: document.getElementById('expense-form-bike').value,
+        date: document.getElementById('expense-date').value,
+        category: document.getElementById('expense-category-form').value,
+        description: document.getElementById('expense-description').value,
+        cost: document.getElementById('expense-cost').value,
+        odometer: document.getElementById('expense-odometer').value,
+        notes: document.getElementById('expense-notes').value
+      });
+      saveStore(store);
+      renderAll();
+      document.getElementById('expense-description').value = '';
+      document.getElementById('expense-cost').value = '';
+      document.getElementById('expense-odometer').value = '';
+      document.getElementById('expense-notes').value = '';
+      toast('Expense logged.');
+    } catch (e) { toast(e.message, true); }
   });
 
   document.getElementById('copy-export-btn').addEventListener('click', function () {
@@ -1141,7 +2001,28 @@ if (typeof document !== 'undefined') {
 
   document.getElementById('log-date').value = todayISO();
   document.getElementById('odo-date').value = todayISO();
+  document.getElementById('expense-date').value = todayISO();
   renderAll();
+
+  /* Handoff intake: delegated confirm/dismiss (the card is rebuilt
+   * by innerHTML), paste fallback on the Data tab, and the
+   * ?handoff= parameter on load. */
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest('[data-handoff-confirm],[data-handoff-dismiss]') : null;
+    if (!el) return;
+    if (el.hasAttribute('data-handoff-confirm')) confirmHandoff();
+    else { pendingHandoff = null; renderHandoffBox(); }
+  });
+  var pasteBtn = document.getElementById('handoff-paste-btn');
+  if (pasteBtn) pasteBtn.addEventListener('click', function () {
+    var text = document.getElementById('handoff-paste-text').value;
+    if (!text.trim()) { toast('Paste the handoff JSON first.', true); return; }
+    receiveHandoff(text);
+    showView('due');
+    var box = document.getElementById('handoff-box');
+    if (box && box.scrollIntoView) box.scrollIntoView();
+  });
+  checkHandoffFromUrl();
 }
 
 /* Node test hook — the core logic above is pure and dependency-free. */
@@ -1151,7 +2032,18 @@ if (typeof module !== 'undefined' && module.exports) {
     setOdometer: setOdometer, addTask: addTask, removeTask: removeTask,
     logService: logService, lastService: lastService,
     taskStatus: taskStatus, dueRows: dueRows,
+    dueReminders: dueReminders,
+    bikeHistoryExport: bikeHistoryExport, bikeHistoryText: bikeHistoryText,
+    historyExportFilename: historyExportFilename,
     historyEntries: historyEntries, historyTotal: historyTotal,
+    EXPENSE_CATEGORIES: EXPENSE_CATEGORIES,
+    expenseCategoryLabel: expenseCategoryLabel,
+    nextExpenseId: nextExpenseId,
+    addExpense: addExpense, removeExpense: removeExpense,
+    expensesForBike: expensesForBike, expenseTotal: expenseTotal,
+    expensesByCategory: expensesByCategory,
+    bikeExpensesExport: bikeExpensesExport, bikeExpensesText: bikeExpensesText,
+    expenseExportFilename: expenseExportFilename,
     validateImport: validateImport, sampleStore: sampleStore,
     mergeSample: mergeSample,
     addMonths: addMonths, daysBetween: daysBetween,
@@ -1161,6 +2053,14 @@ if (typeof module !== 'undefined' && module.exports) {
     factoryScheduleFor: factoryScheduleFor,
     factoryScheduleModel: factoryScheduleModel,
     applyFactorySchedule: applyFactorySchedule,
-    SOON_MILES: SOON_MILES, SOON_DAYS: SOON_DAYS
+    SOON_MILES: SOON_MILES, SOON_DAYS: SOON_DAYS,
+    HANDOFF_FORMAT: HANDOFF_FORMAT, HANDOFF_VERSION: HANDOFF_VERSION,
+    HANDOFF_KIND: HANDOFF_KIND, HANDOFF_MAX_CHARS: HANDOFF_MAX_CHARS,
+    encodePocketHandoff: encodePocketHandoff, parsePocketHandoff: parsePocketHandoff,
+    validatePocketHandoff: validatePocketHandoff,
+    normalizeBikeName: normalizeBikeName, namesMatch: namesMatch,
+    resolvePocketHandoffBike: resolvePocketHandoffBike,
+    pinPocketRosterKey: pinPocketRosterKey,
+    taskFromHandoff: taskFromHandoff, handoffCitation: handoffCitation
   };
 }

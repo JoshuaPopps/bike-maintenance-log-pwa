@@ -1,8 +1,8 @@
 /* Bike Maintenance Log service worker — app-shell cache so the logbook
  * works offline in the garage. Version the cache name on release. */
-var CACHE = 'bike-maintenance-log-v9';
+var CACHE = 'bike-maintenance-log-v13';
 var ASSETS = [
-  './', './index.html', './styles.css', './app.js',
+  './', './index.html', './styles.css', './app.js', './sw-update.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png'
 ];
@@ -10,8 +10,14 @@ var ASSETS = [
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) { return cache.addAll(ASSETS); })
-      .then(function () { return self.skipWaiting(); })
   );
+});
+
+/* Update button (sw-update.js): the waiting worker takes over only
+ * when the user taps — no skipWaiting on install, or the button
+ * would never get a waiting worker to show for. */
+self.addEventListener('message', function (e) {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', function (event) {

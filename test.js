@@ -373,5 +373,441 @@ check('Yamaha includes MT-07 and YZF-R6',
     Object.keys(s.tasks).length === 4);
 })();
 
+/* --- due reminders --- */
+(function () {
+  var s = app.sampleStore();
+  var rem = app.dueReminders(s, null);
+  check('reminders from the sample: 1 overdue, 1 due soon, 2 total',
+    rem.overdueCount === 1 && rem.dueSoonCount === 1 && rem.total === 2);
+  check('reminders leave ok tasks out',
+    rem.rows.every(function (r) { return r.status !== 'ok'; }));
+  check('reminders sort overdue first',
+    rem.rows[0].status === 'overdue' && rem.rows[1].status === 'due-soon');
+  check('reminders name the overdue task',
+    s.tasks[rem.rows[0].task_id].name === 'Brake fluid (inspect)');
+  var bid = Object.keys(s.bikes)[0];
+  var perBike = app.dueReminders(s, bid);
+  check('reminders scoped to one bike match the all-bikes set',
+    perBike.total === 2);
+  check('reminders for an unknown bike are empty',
+    app.dueReminders(s, 'b99').total === 0);
+})();
+(function () {
+  var s = app.emptyStore();
+  check('reminders on an empty logbook are empty',
+    app.dueReminders(s, null).total === 0);
+  var r = bikeWithTask(s, { odo: 1000, miles: 100000, baseline_odo: 0, baseline_date: '2026-01-01' });
+  check('reminders skip an all-ok logbook',
+    app.dueReminders(s, null).total === 0);
+  /* Same task, two bikes: each bike's reminder stays on its own bike. */
+  var s2 = app.emptyStore();
+  var a = bikeWithTask(s2, { bike: 'Bike A', odo: 5000, miles: 3000, baseline_odo: 0, baseline_date: '2026-01-01' });
+  var b2 = app.addBike(s2, { name: 'Bike B', odometer: '1000' });
+  var b2id = Object.keys(s2.bikes).filter(function (id) { return s2.bikes[id].name === 'Bike B'; })[0];
+  app.addTask(s2, { bike_id: b2id, name: 'Engine oil', every_miles: '3000', every_months: '' });
+  var remA = app.dueReminders(s2, a.bid, '2026-11-04');
+  var remB = app.dueReminders(s2, b2id, '2026-11-04');
+  check('reminders are per-bike: overdue on A only, B all ok',
+    remA.total === 1 && remB.total === 0);
+  void b2;
+})();
+(function () {
+  /* Reminders are read-only: calling them changes no task or entry. */
+  var s = app.sampleStore();
+  var before = JSON.stringify(s);
+  app.dueReminders(s, null);
+  check('dueReminders changes nothing in the store',
+    JSON.stringify(s) === before);
+})();
+
+/* --- per-bike service history export --- */
+(function () {
+  var s = app.sampleStore();
+  var bid = Object.keys(s.bikes)[0];
+  var data = app.bikeHistoryExport(s, bid);
+  check('history export names the bike',
+    data.bike.name === 'Example 1995 Softail' && data.bike.year === 1995);
+  check('history export has 3 services, newest first',
+    data.services.length === 3 && data.services[0].task === 'Primary fluid');
+  check('history export totals $78.50',
+    data.total_spent === 78.50 && data.service_count === 3);
+  check('history export lists the bike tasks with intervals',
+    data.tasks.length === 4 &&
+    data.tasks.some(function (t) { return t.name === 'Engine oil' && t.every_miles === 5000; }));
+  check('history export carries the odometer and export date',
+    data.bike.odometer === 42300 && /^\d{4}-\d{2}-\d{2}$/.test(data.exported));
+  check('history export JSON round-trips',
+    JSON.parse(JSON.stringify(data)).services.length === 3);
+  throws('history export for an unknown bike throws', function () {
+    app.bikeHistoryExport(s, 'b99');
+  });
+})();
+(function () {
+  /* Export is one bike only — the other bike's services stay out. */
+  var s = app.emptyStore();
+  var a = bikeWithTask(s, { bike: 'Bike A', odo: 5000, miles: 3000 });
+  app.logService(s, { bike_id: a.bid, task_id: a.tid, date: '2026-11-01', odometer: '5000', cost: '25', notes: 'A only' });
+  var b2 = app.addBike(s, { name: 'Bike B', odometer: '1000' });
+  var b2id = Object.keys(s.bikes).filter(function (id) { return s.bikes[id].name === 'Bike B'; })[0];
+  var tb = app.addTask(s, { bike_id: b2id, name: 'Engine oil', every_miles: '3000', every_months: '' });
+  var tbid = Object.keys(s.tasks).filter(function (id) { return s.tasks[id].name === 'Engine oil' && s.tasks[id].bike_id === b2id; })[0];
+  void b2; void tb;
+  app.logService(s, { bike_id: b2id, task_id: tbid, date: '2026-11-02', odometer: '1000', cost: '99', notes: 'B only' });
+  var dataA = app.bikeHistoryExport(s, a.bid);
+  check('export for Bike A has only Bike A services',
+    dataA.services.length === 1 && dataA.services[0].notes === 'A only' && dataA.total_spent === 25);
+  var dataB = app.bikeHistoryExport(s, b2id);
+  check('export for Bike B has only Bike B services',
+    dataB.services.length === 1 && dataB.total_spent === 99);
+  var textA = app.bikeHistoryText(s, a.bid);
+  check('text export for Bike A never mentions Bike B',
+    textA.indexOf('Bike B') === -1 && textA.indexOf('B only') === -1);
+})();
+(function () {
+  var s = app.sampleStore();
+  var bid = Object.keys(s.bikes)[0];
+  var text = app.bikeHistoryText(s, bid);
+  check('text export names the bike and its spec',
+    text.indexOf('Example 1995 Softail') >= 0 && text.indexOf('Fat Boy') >= 0);
+  check('text export lists services newest first with date, task, mileage, cost',
+    text.indexOf('Primary fluid @ 41,300 mi — $18.00') >= 0);
+  check('text export shows the total and the service count',
+    text.indexOf('3 services — total $78.50') >= 0);
+  check('text export lists the bike tasks with intervals',
+    text.indexOf('Engine oil (every 5,000 mi)') >= 0);
+  check('text export includes a service note',
+    text.indexOf('20W-50, new filter') >= 0);
+  check('text export ends with a newline',
+    text.slice(-1) === '\n');
+})();
+(function () {
+  var s = app.emptyStore();
+  var r = bikeWithTask(s, { odo: 1000, miles: 3000 });
+  var data = app.bikeHistoryExport(s, r.bid);
+  check('history export for a bike with no services is empty, not an error',
+    data.services.length === 0 && data.service_count === 0 && data.total_spent === 0);
+  var text = app.bikeHistoryText(s, r.bid);
+  check('text export for a bike with no services says so',
+    text.indexOf('No services logged yet for this bike.') >= 0);
+})();
+check('history filename slugs the bike name',
+  app.historyExportFilename('Example 1995 Softail', 'json') === 'bike-log-example-1995-softail-history.json');
+check('history filename handles odd characters',
+  app.historyExportFilename("Josh's Fat Boy!", 'txt') === 'bike-log-josh-s-fat-boy-history.txt');
+check('history filename falls back to bike for an empty name',
+  app.historyExportFilename('', 'json') === 'bike-log-bike-history.json');
+
+console.log('pocket handoff — diagnosis to task (receiving side)');
+function exampleTaskHandoff(overrides) {
+  var h = {
+    format: 'pocket-garage-handoff', version: 1, kind: 'diagnosis-to-task',
+    sentAt: '2026-11-24T18:00:00.000Z', from: 'evo-diagnostic',
+    bike: { rosterKey: 'b2', name: '1990 Softail' },
+    payload: {
+      treeId: 'carb-running', treeTitle: 'Running rich / poor idle',
+      topCause: 'Pilot jet too large',
+      cause: 'Pilot jet too large — idle mixture screw has no effect',
+      test: 'Screw the mixture screw all the way in: if the idle does not stumble, the pilot is too big',
+      fix: 'Fit one size smaller pilot jet, then re-adjust the mixture screw',
+      urgency: 'medium', safeToRide: 'Likely rideable — running rich at idle. Fix soon.',
+      suggestedTaskName: 'Carb — pilot jet too large'
+    }
+  };
+  if (overrides) Object.keys(overrides).forEach(function (k) { h[k] = overrides[k]; });
+  return h;
+}
+var _th = exampleTaskHandoff();
+var _thB64 = app.encodePocketHandoff(_th);
+check('handoff encodes to base64url (no + / or =)', /^[-A-Za-z0-9_]+$/.test(_thB64));
+check('handoff round-trips through base64url',
+  JSON.stringify(app.parsePocketHandoff(_thB64)) === JSON.stringify(_th));
+check('handoff parses from raw pasted JSON too',
+  app.parsePocketHandoff(JSON.stringify(_th)).payload.suggestedTaskName === 'Carb — pilot jet too large');
+throws('wrong format rejected', function () {
+  app.parsePocketHandoff(JSON.stringify(exampleTaskHandoff({ format: 'nope' })));
+});
+throws('version 2 rejected', function () {
+  app.parsePocketHandoff(JSON.stringify(exampleTaskHandoff({ version: 2 })));
+});
+throws('carb kind rejected by the bike log', function () {
+  app.parsePocketHandoff(JSON.stringify(exampleTaskHandoff({ kind: 'diagnosis-to-carb' })));
+});
+throws('dyno kind rejected by the bike log', function () {
+  app.parsePocketHandoff(JSON.stringify(exampleTaskHandoff({ kind: 'dyno-run-to-mod' })));
+});
+throws('task name over 80 chars rejected', function () {
+  var h = exampleTaskHandoff();
+  h.payload.suggestedTaskName = new Array(90).join('x');
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('oversize handoff rejected', function () {
+  var h = exampleTaskHandoff(); h.payload.cause = new Array(9000).join('x');
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+(function () {
+  var r = app.emptyStore();
+  var rb = app.addBike(r, { name: '1990 Softail', year: '1990', make: 'Harley-Davidson', model: 'Heritage Classic' });
+  var rid = Object.keys(r.bikes).filter(function (id) { return r.bikes[id] === rb; })[0];
+  check('bike resolves by name match (no pin yet)',
+    (function () { var res = app.resolvePocketHandoffBike(r, _th); return res.status === 'matched' && res.via === 'name'; })());
+  app.pinPocketRosterKey(r, 'b2', rid);
+  check('after pinning, the same handoff resolves by roster key',
+    app.resolvePocketHandoffBike(r, _th).via === 'roster');
+  check('resolution carries the bike id (bike-log bikes have no id field)',
+    app.resolvePocketHandoffBike(r, _th).bikeId === rid);
+  check('a second handoff after pinning still drafts against that bike',
+    app.taskFromHandoff(r, _th, app.resolvePocketHandoffBike(r, _th).bikeId).name === 'Carb — pilot jet too large');
+  check('unknown bike resolves to unknown, never a guess',
+    (function () { var h = exampleTaskHandoff(); h.bike = { rosterKey: 'b9', name: 'No Such Bike' };
+      return app.resolvePocketHandoffBike(r, h).status === 'unknown'; })());
+  var s = app.sampleStore();
+  var bid = Object.keys(s.bikes)[0];
+  var draft = app.taskFromHandoff(s, _th, bid);
+  check('task draft carries the suggested name and a diagnosis citation',
+    draft.name === 'Carb — pilot jet too large' && draft.existingTaskId === null &&
+    draft.notes.indexOf('From the Evo Diagnostic') === 0 &&
+    draft.notes.indexOf('Pilot jet too large') >= 0);
+  var added = app.addTask(s, {
+    bike_id: bid, name: draft.name, every_miles: '5000', every_months: '', notes: draft.notes
+  });
+  check('confirming with a 5000-mi interval creates the task', !!added);
+  var draft2 = app.taskFromHandoff(s, _th, bid);
+  check('second handoff for the same cause finds the existing task, no duplicate',
+    draft2.existingTaskId !== null);
+  check('existing-task lookup is case-insensitive',
+    app.taskFromHandoff(s, _th, bid, 'carb — PILOT JET TOO LARGE').existingTaskId !== null);
+  check('renamed task draft uses the new name',
+    app.taskFromHandoff(s, _th, bid, 'Check pilot jet').name === 'Check pilot jet');
+  check('citation never invents an interval or a jet size',
+    draft.notes.indexOf('5000') < 0 && draft.notes.indexOf('every') < 0);
+  throws('pinning the same key to a second bike is refused', function () {
+    var t = app.emptyStore();
+    var b1 = app.addBike(t, { name: 'Bike One' });
+    var b2 = app.addBike(t, { name: 'Bike Two' });
+    var id1 = Object.keys(t.bikes).filter(function (id) { return t.bikes[id] === b1; })[0];
+    var id2 = Object.keys(t.bikes).filter(function (id) { return t.bikes[id] === b2; })[0];
+    app.pinPocketRosterKey(t, 'b2', id1);
+    app.pinPocketRosterKey(t, 'b2', id2);
+  });
+})();
+
+/* --- expenses --- */
+function expenseStore() {
+  var s = app.emptyStore();
+  var a = app.addBike(s, { name: 'Bike A', odometer: '5000' });
+  var aId = Object.keys(s.bikes).filter(function (id) { return s.bikes[id] === a; })[0];
+  var b = app.addBike(s, { name: 'Bike B', odometer: '1000' });
+  var bId = Object.keys(s.bikes).filter(function (id) { return s.bikes[id] === b; })[0];
+  return { s: s, aId: aId, bId: bId };
+}
+(function () {
+  var r = expenseStore();
+  var x = app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'Oil + filter', cost: '32.50', odometer: '5000', notes: 'bought at the dealer' });
+  check('expense gets an x id and stores as given',
+    x.id === 'x1' && x.cost === 32.50 && x.category === 'parts' && x.odometer === 5000);
+  var x2 = app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-02', category: 'labor', description: 'Shop labor', cost: '85' });
+  check('second expense gets x2, blank odometer stays null',
+    x2.id === 'x2' && x2.odometer === null);
+  var x3 = app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-03', category: '', description: 'Shop rag', cost: '4.999' });
+  check('blank category defaults to other, cost rounds to cents (4.999 -> 5.00)',
+    x3.category === 'other' && x3.cost === 5);
+  var x4 = app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-04', category: 'service', description: 'Gifted gasket', cost: '0' });
+  check('a $0 expense is allowed (free part, still worth recording)', x4.cost === 0);
+  throws('expense on unknown bike rejected', function () {
+    app.addExpense(r.s, { bike_id: 'b99', date: '2026-11-01', category: 'parts', description: 'x', cost: '10' });
+  });
+  throws('expense with no description rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: '   ', cost: '10' });
+  });
+  throws('expense with no cost rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'x', cost: '' });
+  });
+  throws('expense with negative cost rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'x', cost: '-5' });
+  });
+  throws('expense with a bad date rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: 'Nov 1', category: 'parts', description: 'x', cost: '10' });
+  });
+  throws('expense with an unknown category rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'bling', description: 'x', cost: '10' });
+  });
+  throws('expense with a negative odometer rejected', function () {
+    app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'x', cost: '10', odometer: '-1' });
+  });
+})();
+(function () {
+  var r = expenseStore();
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'A1', cost: '10' });
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-02', category: 'labor', description: 'A2', cost: '20' });
+  app.addExpense(r.s, { bike_id: r.bId, date: '2026-11-03', category: 'parts', description: 'B1', cost: '99' });
+  var all = app.expensesForBike(r.s, null, null);
+  check('expenses newest first across bikes',
+    all.length === 3 && all[0].description === 'B1' && all[2].description === 'A1');
+  var aOnly = app.expensesForBike(r.s, r.aId, null);
+  check('expenses filter to one bike',
+    aOnly.length === 2 && aOnly.every(function (x) { return x.bike_id === r.aId; }));
+  var parts = app.expensesForBike(r.s, null, 'parts');
+  check('expenses filter to one category',
+    parts.length === 2 && parts.every(function (x) { return x.category === 'parts'; }));
+  check('expense total sums a bike',
+    app.expenseTotal(aOnly) === 30);
+  var byCat = app.expensesByCategory(all);
+  check('per-category totals (parts 109, labor 20, service 0, other 0)',
+    byCat.parts === 109 && byCat.labor === 20 && byCat.service === 0 && byCat.other === 0);
+  app.removeExpense(r.s, 'x2');
+  check('removing an expense drops it and only it',
+    r.s.expenses.length === 2 && r.s.expenses.every(function (x) { return x.id !== 'x2'; }));
+  var again = app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-04', category: 'other', description: 'A3', cost: '1' });
+  check('expense id is highest suffix in use + 1 (x3 still live, so x4 after deleting x2)', again.id === 'x4');
+  throws('removing an unknown expense throws', function () {
+    app.removeExpense(r.s, 'x99');
+  });
+})();
+(function () {
+  var r = expenseStore();
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'A1', cost: '10' });
+  app.addExpense(r.s, { bike_id: r.bId, date: '2026-11-02', category: 'parts', description: 'B1', cost: '99' });
+  app.removeBike(r.s, r.bId);
+  check('removing a bike drops its expenses too',
+    r.s.expenses.length === 1 && r.s.expenses[0].description === 'A1');
+})();
+(function () {
+  /* History export carries the bike's expenses alongside its
+   * services — the services shape is unchanged. */
+  var s = app.emptyStore();
+  var r = bikeWithTask(s, { bike: 'Bike A', odo: 5000, miles: 3000 });
+  app.logService(s, { bike_id: r.bid, task_id: r.tid, date: '2026-11-01', odometer: '5000', cost: '25', notes: 'A service' });
+  app.addExpense(s, { bike_id: r.bid, date: '2026-10-28', category: 'parts', description: 'Oil + filter', cost: '32.50', notes: 'bought ahead' });
+  app.addExpense(s, { bike_id: r.bid, date: '2026-11-02', category: 'labor', description: 'Shop labor', cost: '85' });
+  var data = app.bikeHistoryExport(s, r.bid);
+  check('history export still totals services at $25',
+    data.total_spent === 25 && data.services.length === 1);
+  check('history export carries 2 expenses, newest first, totaling $117.50',
+    data.expenses.length === 2 && data.expenses[0].description === 'Shop labor' &&
+    data.expenses_total === 117.50 && data.expense_count === 2);
+  check('history export grand total is services + expenses ($142.50)',
+    data.grand_total === 142.50);
+  var text = app.bikeHistoryText(s, r.bid);
+  check('history text lists the expenses section with category and cost',
+    text.indexOf('2 expenses — total $117.50') >= 0 &&
+    text.indexOf('Parts — Oil + filter — $32.50') >= 0 &&
+    text.indexOf('Labor — Shop labor — $85.00') >= 0);
+  check('history text shows the grand total',
+    text.indexOf('Grand total (services + expenses): $142.50') >= 0);
+  var s2 = app.emptyStore();
+  var r2 = bikeWithTask(s2, { bike: 'Bike B', odo: 1000, miles: 3000 });
+  var data2 = app.bikeHistoryExport(s2, r2.bid);
+  check('history export for a bike with no expenses says so, grand total is services only',
+    data2.expenses.length === 0 && data2.expenses_total === 0 && data2.grand_total === 0);
+  check('history text for a bike with no expenses says so',
+    app.bikeHistoryText(s2, r2.bid).indexOf('No expenses logged yet for this bike.') >= 0);
+})();
+(function () {
+  /* Expenses-only export, one bike at a time, same isolation rule. */
+  var r = expenseStore();
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'A1', cost: '10' });
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-02', category: 'labor', description: 'A2', cost: '20' });
+  app.addExpense(r.s, { bike_id: r.bId, date: '2026-11-03', category: 'parts', description: 'B1', cost: '99' });
+  var data = app.bikeExpensesExport(r.s, r.aId);
+  check('expenses export names the bike, 2 expenses, $30 total',
+    data.bike.name === 'Bike A' && data.expense_count === 2 && data.total_spent === 30);
+  check('expenses export breaks down by category',
+    data.by_category.parts === 10 && data.by_category.labor === 20 && data.by_category.other === 0);
+  check('expenses export newest first',
+    data.expenses[0].description === 'A2' && data.expenses[1].description === 'A1');
+  check('expenses export JSON round-trips',
+    JSON.parse(JSON.stringify(data)).expenses.length === 2);
+  throws('expenses export for an unknown bike throws', function () {
+    app.bikeExpensesExport(r.s, 'b99');
+  });
+  var text = app.bikeExpensesText(r.s, r.aId);
+  check('expenses text names the bike and totals',
+    text.indexOf('Expenses — Bike A') === 0 && text.indexOf('2 expenses — total $30.00') >= 0);
+  check('expenses text lists the per-category breakdown',
+    text.indexOf('Parts: $10.00') >= 0 && text.indexOf('Labor: $20.00') >= 0);
+  check('expenses text lists each expense with date, category, cost',
+    text.indexOf('Nov 2, 2026 — Labor — A2 — $20.00') >= 0);
+  check('expenses text for the other bike never mentions Bike A',
+    app.bikeExpensesText(r.s, r.bId).indexOf('Bike A') === -1);
+  check('expenses text ends with a newline', text.slice(-1) === '\n');
+  var empty = app.bikeExpensesExport(r.s, r.aId);
+  void empty;
+  var s2 = app.emptyStore();
+  var r2 = bikeWithTask(s2, { bike: 'Bike C', odo: 0, miles: 3000 });
+  check('expenses text for a bike with no expenses says so',
+    app.bikeExpensesText(s2, r2.bid).indexOf('No expenses logged yet for this bike.') >= 0);
+})();
+check('expenses filename slugs the bike name',
+  app.expenseExportFilename('Example 1995 Softail', 'json') === 'bike-log-example-1995-softail-expenses.json');
+check('expenses filename handles odd characters',
+  app.expenseExportFilename("Josh's Fat Boy!", 'txt') === 'bike-log-josh-s-fat-boy-expenses.txt');
+(function () {
+  /* Import: expenses ride along, old files without them still load. */
+  var r = expenseStore();
+  app.addExpense(r.s, { bike_id: r.aId, date: '2026-11-01', category: 'parts', description: 'A1', cost: '10' });
+  var round = app.validateImport(JSON.parse(JSON.stringify(r.s)));
+  check('import carries expenses through',
+    round.expenses.length === 1 && round.expenses[0].description === 'A1');
+  var old = JSON.parse(JSON.stringify(r.s));
+  delete old.expenses;
+  var oldRound = app.validateImport(old);
+  check('a logbook from before expenses imports with an empty expenses list',
+    Array.isArray(oldRound.expenses) && oldRound.expenses.length === 0);
+  throws('expense pointing at a missing bike rejected on import', function () {
+    var bad = JSON.parse(JSON.stringify(r.s));
+    bad.expenses[0].bike_id = 'b99';
+    app.validateImport(bad);
+  });
+  throws('expense with a negative cost rejected on import', function () {
+    var bad = JSON.parse(JSON.stringify(r.s));
+    bad.expenses[0].cost = -1;
+    app.validateImport(bad);
+  });
+  throws('expense with an unknown category rejected on import', function () {
+    var bad = JSON.parse(JSON.stringify(r.s));
+    bad.expenses[0].category = 'bling';
+    app.validateImport(bad);
+  });
+})();
+(function () {
+  /* mergeSample carries a sample's expenses onto the remapped bike. */
+  var s = app.emptyStore();
+  var sample = app.sampleStore();
+  var sampleBid = Object.keys(sample.bikes)[0];
+  sample.expenses = [{
+    id: 'x1', bike_id: sampleBid, date: '2026-11-01', category: 'parts',
+    description: 'Sample oil', cost: 30, odometer: 42000, notes: ''
+  }];
+  app.mergeSample(s, sample);
+  var exampleBid = Object.keys(s.bikes).filter(function (id) {
+    return s.bikes[id].name === 'Example 1995 Softail';
+  })[0];
+  check('merged sample expense lands on the example bike with a fresh id',
+    s.expenses.length === 1 && s.expenses[0].bike_id === exampleBid &&
+    s.expenses[0].description === 'Sample oil');
+  app.validateImport(JSON.parse(JSON.stringify(s)));
+  check('merged logbook with expenses still validates as CLI-shaped', true);
+})();
+
+/* --- service-worker update button wiring (sw-update.js) --- */
+var fs = require('fs');
+var path = require('path');
+var _sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
+var _html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+var _appjs = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+check('sw.js caches v13', _sw.indexOf('bike-maintenance-log-v13') >= 0);
+check('sw.js precaches sw-update.js', _sw.indexOf('sw-update.js') >= 0);
+check('sw.js has the SKIP_WAITING message handler',
+  _sw.indexOf("addEventListener('message'") >= 0 && _sw.indexOf('SKIP_WAITING') >= 0);
+check('sw.js does not call skipWaiting on install',
+  (_sw.split('self.skipWaiting()').length - 1) === 1);
+check('index.html loads sw-update.js before app.js',
+  _html.indexOf('src="sw-update.js"') >= 0 &&
+  _html.indexOf('src="sw-update.js"') < _html.indexOf('src="app.js"'));
+check('app.js calls PG_SWUpdate.init', _appjs.indexOf('PG_SWUpdate.init') >= 0);
+check('sw-update.js vendored byte-identical to canonical',
+  fs.readFileSync(path.join(__dirname, 'sw-update.js'), 'utf8') ===
+  fs.readFileSync(path.join(__dirname, '..', '..', 'sw-update.js'), 'utf8'));
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
