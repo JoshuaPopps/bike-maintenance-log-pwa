@@ -120,6 +120,17 @@
     </div>
   </section>
 
+  <!-- TIMELINE -->
+  <section id="view-timeline" class="view">
+    <h2>Service timeline</h2>
+    <p class="muted">Everything for one bike, in date order — services done, money spent, rides ridden, and the wear milestones coming up. Built from the logbook you already keep: no new entries, no new forms. A ride never moves the odometer, and neither does this view. Wear milestones show only when they have a real calendar date — tire age (manufacture + 5 and + 10 years) and time-leg services (last done + the month interval). Mileage-only clocks have no date, so they don't appear here.</p>
+    <div class="grid">
+      <label>Bike<select id="timeline-bike"></select></label>
+    </div>
+    <p id="timeline-total" class="card"></p>
+    <div id="timeline-list"></div>
+  </section>
+
   <!-- EXPENSES -->
   <section id="view-expenses" class="view">
     <h2>Expenses</h2>
@@ -257,7 +268,7 @@
     </div>
     <div class="card">
       <h3>Tire age — the 5/10 rule</h3>
-      <p>Michelin/Dunlop motorcycle rule, repeated by Harley-Davidson: have a tire professionally inspected every year after 5 years of use, and replace it at 10 years from the date of manufacture — even if the tread looks fine. Read the date off the DOT code on the sidewall (last 4 digits = week + year, e.g. 5107 = week 51 of 2007). This is <b>not</b> the 6-year figure — that one comes from car-tire makers and car owner's manuals. The tire-age clock on the Due tab applies this rule; enter the manufacture date on the Bikes &amp; Tasks tab to start it.</p>
+      <p>Michelin/Dunlop motorcycle rule, repeated by Harley-Davidson: have a tire professionally inspected every year after 5 years of use, and replace it at 10 years from the date of manufacture — even if the tread looks fine. Read the date off the DOT code on the sidewall (last 4 digits = week + year, e.g. 5107 = week 51 of 2007). This is <b>not</b> the 6-year figure — that one comes from car-tire makers and car owner's manuals. The tire-age clocks on the Due tab apply this rule per position; enter the manufacture dates, front and rear, on the Bikes &amp; Tasks tab to start them.</p>
     </div>
     <div class="card">
       <h3>Key torques</h3>
@@ -314,6 +325,7 @@
   <button class="navbtn active" data-view="due">Due</button>
   <button class="navbtn" data-view="bikes">Bikes &amp; Tasks</button>
   <button class="navbtn" data-view="history">History</button>
+  <button class="navbtn" data-view="timeline">Timeline</button>
   <button class="navbtn" data-view="expenses">Expenses</button>
   <button class="navbtn" data-view="rides">Rides</button>
   <button class="navbtn" data-view="data">Data</button>
@@ -322,6 +334,7 @@
 
 <div id="toast" class="toast" role="status"></div>
 <script src="sw-update.js"></script>
+<script src="bike-profile.js"></script>
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {

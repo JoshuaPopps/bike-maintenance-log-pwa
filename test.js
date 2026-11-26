@@ -610,123 +610,188 @@ check('Yamaha includes MT-07 and YZF-R6',
   check('DOT code of 2 digits is rejected', !!app.decodeDotDate('12').error);
   check('DOT code reading a future year is rejected', !!app.decodeDotDate('0150').error);
 
-  function bikeWithTire(made) {
+  function bikeWithTire(made, rearMade) {
     var s = app.emptyStore();
     app.addBike(s, { name: 'Tire Bike', odometer: '10000' });
     var bid = Object.keys(s.bikes)[0];
-    if (made) app.setTireDate(s, bid, made);
+    if (made) app.setTireDate(s, bid, 'front', made);
+    if (made || rearMade) app.setTireDate(s, bid, 'rear', rearMade || made);
     return { s: s, bid: bid };
   }
-  /* setTireDate: plain date, DOT code, clear, bad input. */
+  /* setTireDate: plain date, DOT code, clear, bad input — per position. */
   var r = bikeWithTire();
-  app.setTireDate(r.s, r.bid, '2019-12-16');
-  check('setTireDate stores a plain manufacture date',
-    r.s.bikes[r.bid].tire_made === '2019-12-16');
-  app.setTireDate(r.s, r.bid, '5107');
+  app.setTireDate(r.s, r.bid, 'front', '2019-12-16');
+  check('setTireDate stores a plain manufacture date on the front',
+    r.s.bikes[r.bid].tire_made_front === '2019-12-16');
+  check('setting the front date leaves the rear alone',
+    r.s.bikes[r.bid].tire_made_rear === null);
+  app.setTireDate(r.s, r.bid, 'front', '5107');
   check('setTireDate decodes a DOT code to the manufacture date',
-    r.s.bikes[r.bid].tire_made === '2007-12-17');
-  app.setTireDate(r.s, r.bid, '');
-  check('setTireDate with empty clears the date',
-    r.s.bikes[r.bid].tire_made === null);
+    r.s.bikes[r.bid].tire_made_front === '2007-12-17');
+  app.setTireDate(r.s, r.bid, 'front', '');
+  check('setTireDate with empty clears that position only',
+    r.s.bikes[r.bid].tire_made_front === null);
+  app.setTireDate(r.s, r.bid, 'rear', '2021-06-01');
+  check('setTireDate stores the rear date independently',
+    r.s.bikes[r.bid].tire_made_rear === '2021-06-01' &&
+    r.s.bikes[r.bid].tire_made_front === null);
+  app.setTireDate(r.s, r.bid, 'rear', '');
   throws('setTireDate rejects garbage', function () {
-    app.setTireDate(r.s, r.bid, 'not a date');
+    app.setTireDate(r.s, r.bid, 'front', 'not a date');
   });
   throws('setTireDate rejects an impossible calendar date', function () {
-    app.setTireDate(r.s, r.bid, '2021-02-30');
+    app.setTireDate(r.s, r.bid, 'front', '2021-02-30');
   });
   throws('setTireDate rejects a future manufacture date', function () {
-    app.setTireDate(r.s, r.bid, '2999-01-01');
+    app.setTireDate(r.s, r.bid, 'front', '2999-01-01');
   });
   throws('setTireDate on an unknown bike throws', function () {
-    app.setTireDate(r.s, 'b99', '2019-01-01');
+    app.setTireDate(r.s, 'b99', 'front', '2019-01-01');
+  });
+  throws('setTireDate with no position throws', function () {
+    app.setTireDate(r.s, r.bid, 'sidewall', '2019-01-01');
   });
 
   /* Bands, fixed asOf 2026-11-04 so nothing drifts. */
   var young = bikeWithTire('2024-01-01');
-  var yc = app.tireAgeClock(young.s, young.bid, '2026-11-04');
+  var yc = app.tireAgeClock(young.s, young.bid, 'front', '2026-11-04');
   check('tire age green under 5 years',
     yc.status === 'ok' && yc.tracked === true);
+  check('front tire clock names its position',
+    yc.component === 'Front tire age');
   check('tire age replace-by is manufacture + 10 years',
     yc.details[2].indexOf('Jan 1, 2034') >= 0);
   var five = bikeWithTire('2021-11-04');
   check('tire age amber on the 5-year line, not before',
-    app.tireAgeClock(five.s, five.bid, '2026-11-03').status === 'ok' &&
-    app.tireAgeClock(five.s, five.bid, '2026-11-04').status === 'due-soon');
-  var amber = app.tireAgeClock(five.s, five.bid, '2026-11-04');
+    app.tireAgeClock(five.s, five.bid, 'front', '2026-11-03').status === 'ok' &&
+    app.tireAgeClock(five.s, five.bid, 'front', '2026-11-04').status === 'due-soon');
+  var amber = app.tireAgeClock(five.s, five.bid, 'front', '2026-11-04');
   check('tire age amber says inspect every year',
     amber.details[1].indexOf('inspection every year') >= 0);
   check('tire age amber replace-by is Nov 4, 2031',
     amber.details[2].indexOf('Nov 4, 2031') >= 0);
   var ten = bikeWithTire('2016-11-04');
   check('tire age red on the 10-year line, not before',
-    app.tireAgeClock(ten.s, ten.bid, '2026-11-03').status === 'due-soon' &&
-    app.tireAgeClock(ten.s, ten.bid, '2026-11-04').status === 'overdue');
-  var red = app.tireAgeClock(ten.s, ten.bid, '2026-11-04');
+    app.tireAgeClock(ten.s, ten.bid, 'front', '2026-11-03').status === 'due-soon' &&
+    app.tireAgeClock(ten.s, ten.bid, 'front', '2026-11-04').status === 'overdue');
+  var red = app.tireAgeClock(ten.s, ten.bid, 'front', '2026-11-04');
   check('tire age red says replace even with tread left',
     red.details[1].indexOf('even if the tread looks fine') >= 0);
   /* DOT-code tire, end to end: 5107 made Dec 2007 is long past 10. */
   var old = bikeWithTire('5107');
-  var oc = app.tireAgeClock(old.s, old.bid, '2026-11-04');
+  var oc = app.tireAgeClock(old.s, old.bid, 'front', '2026-11-04');
   check('DOT-code tire clock is overdue with the decoded replace-by',
     oc.status === 'overdue' && oc.details[0].indexOf('week 51 of 2007') >= 0 &&
     oc.details[2].indexOf('Dec 17, 2017') >= 0);
   /* 3-digit-code tire is red on sight. */
   var vintage = bikeWithTire('258');
   check('3-digit DOT tire is red on sight',
-    app.tireAgeClock(vintage.s, vintage.bid, '2026-11-04').status === 'overdue');
+    app.tireAgeClock(vintage.s, vintage.bid, 'front', '2026-11-04').status === 'overdue');
+
+  /* The positions are independent: a fresh front does not hide a
+   * ten-year-old rear on the same bike. */
+  var mixed = bikeWithTire('2024-01-01', '2016-11-04');
+  check('front and rear clocks are evaluated separately on one bike',
+    app.tireAgeClock(mixed.s, mixed.bid, 'front', '2026-11-04').status === 'ok' &&
+    app.tireAgeClock(mixed.s, mixed.bid, 'rear', '2026-11-04').status === 'overdue');
+  check('rear clock names its position',
+    app.tireAgeClock(mixed.s, mixed.bid, 'rear', '2026-11-04').component === 'Rear tire age');
+  check('rear clock details name the rear tire',
+    app.tireAgeClock(mixed.s, mixed.bid, 'rear', '2026-11-04').details[0].indexOf('Rear tire') === 0);
 
   /* The clock names whose rule it applies — and never the 6-year
-   * car-tire figure. */
+   * car-tire figure, on either position. */
   check('tire age clock cites Michelin/Dunlop, repeated by Harley-Davidson',
     yc.source.indexOf('Michelin/Dunlop') >= 0 &&
     yc.source.indexOf('Harley-Davidson') >= 0);
-  check('tire age clock never uses the 6-year car figure',
+  check('tire age clock never uses the 6-year car figure (front)',
     JSON.stringify(yc).indexOf('6-year') === -1 &&
     JSON.stringify(yc).indexOf('6 year') === -1);
+  var ycRear = app.tireAgeClock(young.s, young.bid, 'rear', '2026-11-04');
+  check('tire age clock never uses the 6-year car figure (rear)',
+    JSON.stringify(ycRear).indexOf('6-year') === -1 &&
+    JSON.stringify(ycRear).indexOf('6 year') === -1);
 
   /* Unset: old logbook, no date entered. */
   var bare = bikeWithTire();
-  var bc = app.tireAgeClock(bare.s, bare.bid, '2026-11-04');
+  var bc = app.tireAgeClock(bare.s, bare.bid, 'front', '2026-11-04');
   check('tire age with no date entered is not-tracked',
     bc.status === 'not-tracked' && bc.tracked === false &&
     bc.details[0].indexOf('No date entered') === 0);
-  /* A bike object with no tire_made key at all (pre-v18 logbook)
+  check('rear with no date entered is not-tracked too',
+    app.tireAgeClock(bare.s, bare.bid, 'rear', '2026-11-04').status === 'not-tracked');
+  /* A bike object with no tire keys at all (pre-v18 logbook)
    * behaves the same — never an error. */
   var legacy = app.emptyStore();
   app.addBike(legacy, { name: 'Legacy Bike', odometer: '5000' });
   var lbid = Object.keys(legacy.bikes)[0];
-  delete legacy.bikes[lbid].tire_made;
-  check('legacy bike without a tire_made key shows no date entered',
-    app.tireAgeClock(legacy, lbid, '2026-11-04').status === 'not-tracked');
+  delete legacy.bikes[lbid].tire_made_front;
+  delete legacy.bikes[lbid].tire_made_rear;
+  check('legacy bike without tire keys shows no date entered',
+    app.tireAgeClock(legacy, lbid, 'front', '2026-11-04').status === 'not-tracked' &&
+    app.tireAgeClock(legacy, lbid, 'rear', '2026-11-04').status === 'not-tracked');
   app.validateImport(JSON.parse(JSON.stringify(legacy)));
   check('legacy logbook without tire dates still validates', true);
   var badMade = JSON.parse(JSON.stringify(legacy));
-  badMade.bikes[lbid].tire_made = 'garbage';
-  throws('import rejects a bad tire manufacture date', function () {
+  badMade.bikes[lbid].tire_made_front = 'garbage';
+  throws('import rejects a bad front tire manufacture date', function () {
     app.validateImport(badMade);
   });
+  var badRear = JSON.parse(JSON.stringify(legacy));
+  badRear.bikes[lbid].tire_made_rear = 'garbage';
+  throws('import rejects a bad rear tire manufacture date', function () {
+    app.validateImport(badRear);
+  });
+  /* A pre-v19 logbook with one tire_made migrates by copying the
+   * single date to both positions. */
+  var singleDate = JSON.parse(JSON.stringify(legacy));
+  singleDate.bikes[lbid].tire_made = '2019-12-16';
+  var migrated = app.validateImport(singleDate);
+  check('old single tire_made migrates to both positions on import',
+    migrated.bikes[lbid].tire_made_front === '2019-12-16' &&
+    migrated.bikes[lbid].tire_made_rear === '2019-12-16' &&
+    !('tire_made' in migrated.bikes[lbid]));
+  var legacyBad = JSON.parse(JSON.stringify(legacy));
+  legacyBad.bikes[lbid].tire_made = 'garbage';
+  throws('import rejects a bad legacy tire manufacture date', function () {
+    app.validateImport(legacyBad);
+  });
+  var viaAdd = app.emptyStore();
+  app.addBike(viaAdd, { name: 'Old Bike', odometer: '1000', tire_made: '2019-12-16' });
+  var abid = Object.keys(viaAdd.bikes)[0];
+  check('addBike with a legacy single tire_made copies it to both positions',
+    viaAdd.bikes[abid].tire_made_front === '2019-12-16' &&
+    viaAdd.bikes[abid].tire_made_rear === '2019-12-16');
 
-  /* The clock rides in wearClocks as the 18th clock, read-only,
-   * with no Log button target (no task drives it). */
+  /* The clocks ride in wearClocks as the 18th and 19th clocks,
+   * read-only, with no Log button target (no task drives them). */
   var s2 = bikeWithTire('2021-11-04');
   var before = JSON.stringify(s2.s);
   var clocks = app.wearClocks(s2.s, s2.bid, '2026-11-04');
-  check('wearClocks now carries 18 clocks including Tire age',
-    clocks.length === 18 &&
-    clocks.some(function (c) { return c.component === 'Tire age'; }));
-  var wc = clocks.filter(function (c) { return c.component === 'Tire age'; })[0];
-  check('wearClocks Tire age matches tireAgeClock and has no task',
-    wc.status === 'due-soon' && wc.taskId === null && wc.tracked === true);
-  check('wearClocks with a tire date changes nothing in the store',
+  check('wearClocks now carries 19 clocks including Front and Rear tire age',
+    clocks.length === 19 &&
+    clocks.some(function (c) { return c.component === 'Front tire age'; }) &&
+    clocks.some(function (c) { return c.component === 'Rear tire age'; }) &&
+    !clocks.some(function (c) { return c.component === 'Tire age'; }));
+  var wcF = clocks.filter(function (c) { return c.component === 'Front tire age'; })[0];
+  var wcR = clocks.filter(function (c) { return c.component === 'Rear tire age'; })[0];
+  check('wearClocks Front tire age matches tireAgeClock and has no task',
+    wcF.status === 'due-soon' && wcF.taskId === null && wcF.tracked === true);
+  check('wearClocks Rear tire age matches too',
+    wcR.status === 'due-soon' && wcR.taskId === null && wcR.tracked === true);
+  check('wearClocks with tire dates changes nothing in the store',
     JSON.stringify(s2.s) === before);
   var threw = false;
-  try { app.tireAgeClock(s2.s, 'b99', '2026-11-04'); } catch (e) { threw = true; }
+  try { app.tireAgeClock(s2.s, 'b99', 'front', '2026-11-04'); } catch (e) { threw = true; }
   check('tire age clock for an unknown bike throws', threw);
+  var threwPos = false;
+  try { app.tireAgeClock(s2.s, s2.bid, 'sidewall', '2026-11-04'); } catch (e) { threwPos = true; }
+  check('tire age clock with no position throws', threwPos);
 
-  /* Bike removal cascades to its tire date. */
+  /* Bike removal cascades to its tire dates. */
   var gone = bikeWithTire('2019-01-01');
   app.removeBike(gone.s, gone.bid);
-  check('removing the bike removes its tire date with it',
+  check('removing the bike removes its tire dates with it',
     Object.keys(gone.s.bikes).length === 0);
 })();
 
@@ -1106,6 +1171,94 @@ throws('wiring kind rejected by the bike log', function () {
     stockDraft.notes.indexOf(', curve ') < 0 && stockDraft.notes.indexOf('final advance') < 0);
 })();
 
+console.log('pocket handoff — ride to ride (receiving side, kind ride-to-ride)');
+function exampleRideHandoff(overrides) {
+  var h = {
+    format: 'pocket-garage-handoff', version: 1, kind: 'ride-to-ride',
+    sentAt: '2026-11-25T18:00:00.000Z', from: 'gps-speedometer',
+    bike: { rosterKey: 'b2', name: '1990 Softail' },
+    payload: {
+      ride: {
+        date: '2026-11-25', route: 'Ride Nov 25, 2026', miles: 87.4,
+        notes: 'Recorded ride · top 62 mph · 2h 14m riding · 984 ft climb · max lean 28°',
+        kind: 'recorded'
+      }
+    }
+  };
+  if (overrides) Object.keys(overrides).forEach(function (k) { h[k] = overrides[k]; });
+  return h;
+}
+var _rh = exampleRideHandoff();
+check('ride handoff round-trips through base64url',
+  JSON.stringify(app.parsePocketHandoff(app.encodePocketHandoff(_rh))) === JSON.stringify(_rh));
+check('ride handoff parses from raw pasted JSON too',
+  app.parsePocketHandoff(JSON.stringify(_rh)).payload.ride.miles === 87.4);
+throws('ride handoff with a bad date rejected', function () {
+  var h = exampleRideHandoff(); h.payload.ride.date = 'Nov 25';
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('ride handoff with zero miles rejected', function () {
+  var h = exampleRideHandoff(); h.payload.ride.miles = 0;
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('ride handoff with negative miles rejected', function () {
+  var h = exampleRideHandoff(); h.payload.ride.miles = -5;
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('ride handoff with no route rejected', function () {
+  var h = exampleRideHandoff(); h.payload.ride.route = '   ';
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('ride handoff with an unknown kind value rejected', function () {
+  var h = exampleRideHandoff(); h.payload.ride.kind = 'teleported';
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+throws('ride handoff with no ride object rejected', function () {
+  var h = exampleRideHandoff(); h.payload = {};
+  app.parsePocketHandoff(JSON.stringify(h));
+});
+(function () {
+  var r = app.emptyStore();
+  var rb = app.addBike(r, { name: '1990 Softail', odometer: '42000' });
+  var rid = Object.keys(r.bikes).filter(function (id) { return r.bikes[id] === rb; })[0];
+  check('ride bike resolves by name match (no pin yet)',
+    (function () { var res = app.resolvePocketHandoffBike(r, _rh); return res.status === 'matched' && res.via === 'name'; })());
+  app.pinPocketRosterKey(r, 'b2', rid);
+  check('after pinning, the ride handoff resolves by roster key',
+    app.resolvePocketHandoffBike(r, _rh).via === 'roster');
+  check('unknown ride bike resolves to unknown, never a guess',
+    (function () { var h = exampleRideHandoff(); h.bike = { rosterKey: 'b9', name: 'No Such Bike' };
+      return app.resolvePocketHandoffBike(r, h).status === 'unknown'; })());
+  var preview = app.rideFromHandoff(r, _rh, rid);
+  check('ride preview carries the ride exactly, no existing ride yet',
+    preview.date === '2026-11-25' && preview.route === 'Ride Nov 25, 2026' &&
+    preview.miles === 87.4 && preview.kind === 'recorded' && preview.existingRideId === null);
+  var added = app.addRide(r, {
+    bike_id: rid, date: preview.date, route: preview.route,
+    miles: preview.miles, notes: preview.notes
+  });
+  check('confirming adds the ride to the Rides tab',
+    !!added && r.rides.length === 1 && r.rides[0].miles === 87.4);
+  check('confirming a ride handoff does not move the odometer',
+    r.bikes[rid].odometer === 42000);
+  var preview2 = app.rideFromHandoff(r, _rh, rid);
+  check('sending the same ride twice flags the duplicate, never silently',
+    preview2.existingRideId === r.rides[0].id);
+  /* A planned route validates and previews the same way — the
+   * "not ridden yet" is in the notes, never hidden. */
+  var planned = exampleRideHandoff();
+  planned.payload.ride = {
+    date: '2026-11-25', route: 'Planned: Here → Wickenburg → Tortilla Flat, AZ',
+    miles: 87.4, notes: 'Planned route — not ridden yet.', kind: 'planned'
+  };
+  var parsed = app.parsePocketHandoff(JSON.stringify(planned));
+  check('planned ride handoff validates',
+    parsed.payload.ride.kind === 'planned');
+  var pp = app.rideFromHandoff(r, parsed, rid);
+  check('planned ride preview keeps the not-ridden-yet note',
+    pp.notes.indexOf('not ridden yet') !== -1 && pp.existingRideId === null);
+})();
+
 /* --- expenses --- */
 function expenseStore() {
   var s = app.emptyStore();
@@ -1482,14 +1635,142 @@ check('rides filename handles odd characters',
   check('merged logbook with rides still validates as CLI-shaped', true);
 })();
 
+/* --- service timeline --- */
+(function () {
+  function tlStore() {
+    var s = app.emptyStore();
+    app.addBike(s, { name: 'Fat Boy', year: '1995', make: 'Harley-Davidson', model: 'Fat Boy', odometer: '42300' });
+    var bid = Object.keys(s.bikes)[0];
+    /* Time-leg task, last done 2026-01-10, every 6 months. */
+    app.addTask(s, { bike_id: bid, name: 'Engine oil', every_miles: '', every_months: '6' });
+    var tid = Object.keys(s.tasks)[0];
+    s.tasks[tid].baseline_date = '2026-01-01';
+    app.logService(s, { bike_id: bid, task_id: tid, date: '2026-01-10', odometer: '42000', cost: '25.50', notes: '20W-50' });
+    /* Mileage-only task — no date, so no wear milestone. */
+    app.addTask(s, { bike_id: bid, name: 'Drive belt', every_miles: '5000', every_months: '' });
+    app.addExpense(s, { bike_id: bid, date: '2026-01-05', category: 'parts', cost: '100', description: 'Oil + filter' });
+    app.addRide(s, { bike_id: bid, date: '2026-01-15', route: 'Tortilla Flat loop', miles: '185.5' });
+    /* Front tire made 2021-06-14: inspect-by 2026-06-14, replace-by 2031-06-14. Rear unset. */
+    app.setTireDate(s, bid, 'front', '2021-06-14');
+    return { store: s, bid: bid, tid: tid };
+  }
+  var f = tlStore();
+  var ev = app.timelineEvents(f.store, f.bid, '2026-11-04');
+  check('timeline functions are exported',
+    typeof app.timelineEvents === 'function' && typeof app.timelineSummary === 'function' &&
+    typeof app.timelineBikeForRosterKey === 'function' && typeof app.timelineRosterName === 'function');
+  check('timeline merges services, expenses, rides, wear in date order', ev.length === 6 &&
+    ev[0].kind === 'expense' && ev[1].kind === 'service' && ev[2].kind === 'ride' &&
+    ev[3].kind === 'wear' && ev[4].kind === 'wear' && ev[5].kind === 'wear');
+  check('timeline is oldest first', ev[0].date === '2026-01-05' && ev[5].date === '2031-06-14');
+  check('timeline tire inspect-by milestone is manufacture + 5 years',
+    ev[3].title === 'Front tire — annual inspection starts' && ev[3].date === '2026-06-14');
+  check('timeline tire replace-by milestone is manufacture + 10 years',
+    ev[5].title === 'Front tire — replace by' && ev[5].date === '2031-06-14');
+  check('timeline time-leg milestone is last service + months',
+    ev[4].title === 'Engine oil — due' && ev[4].date === '2026-07-10');
+  check('timeline past inspect-by reads due-soon, never overdue', ev[3].status === 'due-soon');
+  check('timeline past time-leg due reads overdue', ev[4].status === 'overdue');
+  check('timeline future replace-by is ok and upcoming', ev[5].status === 'ok' && ev[5].upcoming === true);
+  check('timeline mileage-only task makes no wear milestone',
+    ev.filter(function (e) { return e.title.indexOf('Drive belt') === 0; }).length === 0);
+  check('timeline rear tire with no date makes no milestone',
+    ev.filter(function (e) { return e.title.indexOf('Rear tire') === 0; }).length === 0);
+  var sum = app.timelineSummary(ev);
+  check('timeline summary counts and totals',
+    sum.events === 6 && sum.services === 1 && sum.expenses === 1 && sum.rides === 1 &&
+    sum.wear === 3 && sum.upcoming === 1 && sum.serviceCost === 25.5 &&
+    sum.expenseCost === 100 && sum.totalCost === 125.5 && sum.rideMiles === 185.5);
+  /* Per-bike filter and all-bikes. */
+  app.addBike(f.store, { name: 'Knucklehead' });
+  var bid2 = Object.keys(f.store.bikes).filter(function (id) { return id !== f.bid; })[0];
+  app.addRide(f.store, { bike_id: bid2, date: '2026-02-01', route: 'Elsewhere', miles: '50' });
+  var ev1 = app.timelineEvents(f.store, f.bid, '2026-11-04');
+  var ev2 = app.timelineEvents(f.store, bid2, '2026-11-04');
+  var evAll = app.timelineEvents(f.store, null, '2026-11-04');
+  check('timeline per-bike filter shows only that bike', ev1.length === 6 &&
+    ev1.every(function (e) { return e.bike_id === f.bid; }));
+  check('timeline second bike shows only its own events',
+    ev2.length === 1 && ev2[0].kind === 'ride' && ev2[0].title === 'Elsewhere');
+  check('timeline all-bikes merges both bikes', evAll.length === 7 &&
+    evAll.some(function (e) { return e.bike_id === bid2; }));
+  throws('timeline unknown bike rejected', function () { app.timelineEvents(f.store, 'b99'); });
+  /* Time-leg baseline: never-logged task counts from creation. */
+  app.addTask(f.store, { bike_id: f.bid, name: 'Brake fluid', every_miles: '', every_months: '12' });
+  var tidBf = Object.keys(f.store.tasks).filter(function (id) {
+    return f.store.tasks[id].name === 'Brake fluid';
+  })[0];
+  f.store.tasks[tidBf].baseline_date = '2026-01-01';
+  var evBase = app.timelineEvents(f.store, f.bid, '2026-11-04');
+  var bf = evBase.filter(function (e) { return e.title === 'Brake fluid — due'; });
+  check('timeline unlogged time-leg task counts from its baseline',
+    bf.length === 1 && bf[0].date === '2027-01-01');
+  /* Same-day tie-break: service, expense, ride, wear — in that order. */
+  var s3 = app.emptyStore();
+  app.addBike(s3, { name: 'Tie Bike' });
+  var b3 = Object.keys(s3.bikes)[0];
+  app.addTask(s3, { bike_id: b3, name: 'Engine oil', every_miles: '', every_months: '12' });
+  var t3 = Object.keys(s3.tasks)[0];
+  s3.tasks[t3].baseline_date = '2026-01-01';
+  app.logService(s3, { bike_id: b3, task_id: t3, date: '2026-03-01', odometer: '1000', cost: '10' });
+  app.addExpense(s3, { bike_id: b3, date: '2026-03-01', category: 'parts', cost: '5', description: 'Filter' });
+  app.addRide(s3, { bike_id: b3, date: '2026-03-01', route: 'Loop', miles: '10' });
+  app.setTireDate(s3, b3, 'front', '2016-03-01');
+  var evTie = app.timelineEvents(s3, b3, '2026-11-04');
+  var sameDay = evTie.filter(function (e) { return e.date === '2026-03-01'; });
+  check('timeline same-day order is service, expense, ride, wear', sameDay.length === 4 &&
+    sameDay[0].kind === 'service' && sameDay[1].kind === 'expense' &&
+    sameDay[2].kind === 'ride' && sameDay[3].kind === 'wear' &&
+    sameDay[3].title === 'Front tire — replace by');
+  /* Read-only: building the timeline changes nothing, and a ride in
+   * the timeline leaves the odometer alone. */
+  var before = JSON.stringify(f.store);
+  var odoBefore = f.store.bikes[f.bid].odometer;
+  app.timelineEvents(f.store, null, '2026-11-04');
+  app.timelineSummary(app.timelineEvents(f.store, f.bid, '2026-11-04'));
+  check('timeline never writes: store unchanged, odometer untouched',
+    JSON.stringify(f.store) === before && f.store.bikes[f.bid].odometer === odoBefore);
+  /* Shared-roster resolution. */
+  var roster = app.BikeProfile ? app.BikeProfile.create(null).load() : [];
+  check('bike-profile module vendored and readable in Node',
+    Array.isArray(roster) && roster.length === 3 && roster[0].key === 'b1' &&
+    roster[0].name === '1995 Fat Boy');
+  app.pinPocketRosterKey(f.store, 'b1', f.bid);
+  check('timeline resolves a roster key to the pinned bike',
+    app.timelineBikeForRosterKey(f.store, 'b1') === f.bid);
+  check('timeline unknown roster key resolves to nothing, never another bike',
+    app.timelineBikeForRosterKey(f.store, 'b9') === null);
+  throws('timeline empty roster key rejected', function () {
+    app.timelineBikeForRosterKey(f.store, '  ');
+  });
+  check('timeline roster name is canonical for a pinned bike',
+    app.timelineRosterName(roster, f.store.bikes[f.bid]) === '1995 Fat Boy');
+  check('timeline unpinned bike keeps its logbook name',
+    app.timelineRosterName(roster, f.store.bikes[bid2]) === 'Knucklehead');
+  check('timeline roster without the key keeps the logbook name',
+    app.timelineRosterName([], f.store.bikes[f.bid]) === 'Fat Boy');
+})();
+
 /* --- service-worker update button wiring (sw-update.js) --- */
 var fs = require('fs');
 var path = require('path');
 var _sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
 var _html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 var _appjs = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-check('sw.js caches v18', _sw.indexOf('bike-maintenance-log-v18') >= 0);
+check('sw.js caches v20', _sw.indexOf('bike-maintenance-log-v20') >= 0);
 check('sw.js precaches sw-update.js', _sw.indexOf('sw-update.js') >= 0);
+check('sw.js precaches bike-profile.js', _sw.indexOf('bike-profile.js') >= 0);
+check('index.html has the timeline view', _html.indexOf('id="view-timeline"') >= 0);
+check('index.html has the timeline nav button', _html.indexOf('data-view="timeline"') >= 0);
+check('index.html has the timeline bike select', _html.indexOf('id="timeline-bike"') >= 0);
+check('index.html has the timeline summary and list',
+  _html.indexOf('id="timeline-total"') >= 0 && _html.indexOf('id="timeline-list"') >= 0);
+check('index.html loads bike-profile.js before app.js',
+  _html.indexOf('src="bike-profile.js"') >= 0 &&
+  _html.indexOf('src="bike-profile.js"') < _html.indexOf('src="app.js"'));
+check('bike-profile.js vendored byte-identical to canonical',
+  fs.readFileSync(path.join(__dirname, 'bike-profile.js'), 'utf8') ===
+  fs.readFileSync(path.join(__dirname, '..', '..', 'bike-profile.js'), 'utf8'));
 check('sw.js has the SKIP_WAITING message handler',
   _sw.indexOf("addEventListener('message'") >= 0 && _sw.indexOf('SKIP_WAITING') >= 0);
 check('sw.js does not call skipWaiting on install',
