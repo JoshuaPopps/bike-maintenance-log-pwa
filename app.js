@@ -141,7 +141,31 @@ function commonModels(brand) {
  * (engine oil, brake fluid, wheel bearings, rear fork bearings):
  * the schedule stays miles-only like the Softail one — the manual
  * gives no months leg for these jobs as a schedule — and the
- * footnote is printed in the task note instead.
+ * footnote is printed in the task note instead. Checked Nov 25,
+ * 2026 against both manuals: neither table has a months column
+ * and neither prints "12 months" anywhere (softail-97-98 §1,
+ * pp.1-38–1-48; softail-84-99 Ch. 3 Table 2, p.122). The footnote
+ * is a "prior to storage OR annually" trigger, not a repeating
+ * 12-month interval from the last service — and on the Softail
+ * table the starred set is SIX rows (engine oil, engine oil
+ * filter, transmission lubricant, wheel bearings, front fork oil,
+ * brake fluid), not four; rear fork bearings is starred only on
+ * the Sportster table. Turning "annually" into every_months: 12
+ * would be an interpretation, not a published interval, so it is
+ * NOT wired — it needs Joshua's call.
+ *
+ * One Clymer-only line lives here too: the chain-drive Sportster
+ * "Drive chain lubrication" task (every 300 mi) comes from the
+ * 1986–2003 Sportster Service Manual (Clymer) Ch. 3, Table 1 —
+ * NOT from the Evo Clymer manual, which has no chain-lube
+ * interval at all (its Table 1 lists only chain tension checks).
+ * It carries a per-task `years: [1986, 1990]` scope — the all-
+ * chain-drive years — so applyFactorySchedule and wearClocks
+ * skip it for belt-drive bikes. 1991–92 Sportsters came both
+ * ways (chain and belt); the manual gives no clean model split,
+ * so a 1991–92 chain-drive bike adds this task by hand — the
+ * note says so. A task with no `years` applies to the whole
+ * schedule range, as before.
  *
  * Every task's `notes` names its source, so the filled-in list shows
  * where each interval came from in the UI. A model with no entry
@@ -186,6 +210,7 @@ var FACTORY_SCHEDULES = [
       { name: 'Primary chain', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect primary chain every 5,000 mi (Clymer Table 1: inspect + check tension, every 5,000 mi).' },
       { name: 'Clutch adjustment', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: adjust every 5,000 mi (first service 500 mi).' },
       { name: 'Drive belt', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect every 5,000 mi (first inspect 2,500 mi; adjust at the 500-mi first service).' },
+      { name: 'Drive chain lubrication', every_miles: 300, years: [1986, 1990], notes: 'Clymer — SPORTSTER value, chain-drive models ONLY: 1986–2003 Sportster Service Manual (Clymer) Ch. 3, Table 1: lubricate drive chain every 300 mi (480 km) (models so equipped). Belt-drive Sportsters (1991-on) have no drive chain — do not use this task on a belt-drive bike. 1991–92 came both chain and belt; a 1991–92 chain-drive bike adds this task by hand.' },
       { name: 'Brake fluid', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect level/condition every 5,000 mi (first 2,500 mi; DOT 5 only). *Also perform prior to storage or annually.' },
       { name: 'Tires', every_miles: 2500, notes: 'Factory schedule — SPORTSTER value: FSM #99484-98 §1: inspect tire pressure and wear/damage every 2,500 mi (and pre-ride). The Softail schedule says 5,000 mi — do not use the Softail number on a Sportster. Replace on condition/wear, not on mileage.' },
       { name: 'Air filter', every_miles: 5000, notes: 'Factory schedule — Sportster FSM #99484-98 §1: inspect air cleaner every 5,000 mi (first 2,500 mi; Clymer Table 1: inspect and clean, every 5,000 mi).' },
@@ -228,6 +253,17 @@ function factoryScheduleFor(make, model, year) {
   return s;
 }
 
+/* True when a schedule task applies to a bike of this year. A task
+ * with no `years` applies to the whole schedule range; a task with
+ * `years: [lo, hi]` applies only inside it (the chain-drive
+ * Sportster chain-lube task, 1986–1990 only). */
+function scheduleTaskApplies(st, year) {
+  if (!st.years) return true;
+  var y = Number(year);
+  if (isNaN(y)) return false;
+  return y >= st.years[0] && y <= st.years[1];
+}
+
 /* Fill a bike's task list from its factory schedule. Adds only tasks
  * the bike does not already have (matched by name, case-insensitive)
  * — a task the user set keeps its own interval and notes, and
@@ -239,6 +275,7 @@ function applyFactorySchedule(store, bikeId) {
   if (!sched) return { added: 0, skipped: 0, schedule: null };
   var added = 0, skipped = 0;
   sched.tasks.forEach(function (st) {
+    if (!scheduleTaskApplies(st, b.year)) return; /* year-scoped task: not this bike */
     var exists = Object.keys(store.tasks).some(function (id) {
       var t = store.tasks[id];
       return t.bike_id === bikeId && t.name.toLowerCase() === st.name.toLowerCase();
@@ -275,7 +312,7 @@ function _storage() {
 }
 
 function emptyStore() {
-  return { bikes: {}, tasks: {}, entries: [], expenses: [] };
+  return { bikes: {}, tasks: {}, entries: [], expenses: [], rides: [] };
 }
 
 function loadStore() {
@@ -286,9 +323,18 @@ function loadStore() {
     if (!data || typeof data !== 'object') return emptyStore();
     data.bikes = data.bikes || {};
     data.tasks = data.tasks || {};
+    /* Logbooks saved before tire dates existed have no `tire_made`
+     * key on their bikes — that means "no date entered", never an
+     * error. */
+    Object.keys(data.bikes).forEach(function (id) {
+      var b = data.bikes[id];
+      if (b && typeof b === 'object' && !('tire_made' in b)) b.tire_made = null;
+    });
     data.entries = Array.isArray(data.entries) ? data.entries : [];
     /* Logbooks saved before expenses existed have no key at all. */
     data.expenses = Array.isArray(data.expenses) ? data.expenses : [];
+    /* Logbooks saved before rides existed have no key at all. */
+    data.rides = Array.isArray(data.rides) ? data.rides : [];
     /* Expenses saved before receipt photos existed have no `photo`
      * key — that means "no photo", never an error. */
     data.expenses.forEach(function (x) {
@@ -380,6 +426,14 @@ function fmtMiles(miles) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' mi';
 }
 
+/* Ride miles keep one decimal — a 12.5-mile loop is not 13 miles.
+ * Whole miles still print without a trailing ".0". */
+function fmtRideMiles(miles) {
+  var n = Number(miles);
+  if (isNaN(n)) return '0 mi';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 1 }) + ' mi';
+}
+
 function fmtMoney(cost) {
   if (cost == null) return '';
   return '$' + Number(cost).toFixed(2);
@@ -414,6 +468,11 @@ function addBike(store, fields) {
     notes: fields.notes || '',
     odometer: odo,
     odometer_date: todayISO(),
+    /* Tire manufacture date (YYYY-MM-DD) for the tire-age clock —
+     * one date per bike; null until the user enters one. Old
+     * logbooks have no key at all, which loadStore normalises to
+     * null. Deleting the bike deletes this date with it. */
+    tire_made: fields.tire_made || null,
     /* Pocket Garage handoff pin: the shared roster key (b1/b2/b3)
      * this bike was confirmed as. Null until a confirmed handoff
      * pins it — never set by a name match alone. */
@@ -424,12 +483,15 @@ function addBike(store, fields) {
 
 function removeBike(store, bikeId) {
   if (!store.bikes[bikeId]) throw new Error('Bike not found.');
+  /* The tire manufacture date lives on the bike object, so it goes
+   * with the bike — no separate cleanup. */
   delete store.bikes[bikeId];
   Object.keys(store.tasks).forEach(function (tid) {
     if (store.tasks[tid].bike_id === bikeId) delete store.tasks[tid];
   });
   store.entries = store.entries.filter(function (e) { return e.bike_id !== bikeId; });
   store.expenses = (store.expenses || []).filter(function (x) { return x.bike_id !== bikeId; });
+  store.rides = (store.rides || []).filter(function (r) { return r.bike_id !== bikeId; });
 }
 
 /* Returns { warned: true } when the new reading is lower than recorded
@@ -516,8 +578,13 @@ function taskStatus(store, bikeId, taskId, asOf) {
   if (t.every_miles) {
     var dueOdo = baseOdo + t.every_miles;
     var left = dueOdo - b.odometer;
+    /* The "due soon" window is capped at half the interval: a fixed
+     * 500-mi window is wider than a 300-mi interval (chain lube),
+     * so that clock could never read ok. Intervals of 1,000 mi or
+     * more keep the plain 500-mi window, as before. */
+    var soonMiles = Math.min(SOON_MILES, Math.floor(t.every_miles / 2));
     if (left <= 0) legs.push({ status: 'overdue', text: fmtMiles(-left) + ' overdue' });
-    else if (left <= SOON_MILES) legs.push({ status: 'due-soon', text: 'due in ' + fmtMiles(left) });
+    else if (left <= soonMiles) legs.push({ status: 'due-soon', text: 'due in ' + fmtMiles(left) });
     else legs.push({ status: 'ok', text: 'due in ' + fmtMiles(left) + ' (@ ' + fmtMiles(dueOdo) + ')' });
   }
   if (t.every_months) {
@@ -603,18 +670,181 @@ function dueReminders(store, bikeId, asOf) {
 /* from the bike's own task (set by the factory auto-fill, which     */
 /* cites its manual) or, for a bike with no such task yet, from its  */
 /* factory schedule. A component with no published interval anywhere */
-/* gets NO clock: drive chain (both factory tables are belt-drive),  */
-/* tire replacement (both manuals: replace on condition/wear, not    */
-/* on mileage — the Tires clock is the inspect interval), coolant    */
-/* (air-cooled Harleys have no cooling system), and brake-pad        */
-/* replacement (inspect interval only — replace on wear).            */
+/* gets NO clock: coolant (air-cooled Harleys have no cooling        */
+/* system) and brake-pad replacement (inspect interval only —        */
+/* replace on wear). Tire replacement is the date-based exception:   */
+/* both manuals say replace on condition/wear, not on mileage, so   */
+/* the Tires clock stays the inspect interval — and the separate      */
+/* 'Tire age' clock below runs off the DOT manufacture date          */
+/* (Michelin/Dunlop 5/10 rule) instead of any task. Drive chain is   */
+/* the one scoped exception: it HAS a clock, but only for            */
+/* chain-drive Sportsters (1986–1990, Clymer every 300 mi) — the     */
+/* factory tables are belt-drive, so a belt-drive bike shows         */
+/* no-interval for it, never an invented chain job.                  */
 /*                                                                    */
 /* Status values: 'ok' / 'due-soon' / 'overdue' (tracked, from the  */
 /* task), 'not-tracked' (published interval exists for this bike     */
 /* but no task yet — add it to start the clock), 'no-interval'       */
 /* (no published interval on file for this bike at all — the clock   */
 /* needs the user's manual).                                          */
+/*                                                                    */
+/* One component is date-based, not task-based: 'Tire age' runs off  */
+/* the DOT manufacture date stored on the bike (tire_made), not off   */
+/* a service interval — the manuals say replace tires on condition    */
+/* /wear, never on mileage, so no task interval could drive it.       */
+/* Its clock is tireAgeClock below; wearClocks delegates to it.       */
 /* ------------------------------------------------------------------ */
+/* Tire age — a date-based wear clock, per bike.                       */
+/*                                                                     */
+/* Rule (Michelin/Dunlop motorcycle guidance, repeated by            */
+/* Harley-Davidson — NOT the 6-year car-tire figure): annual          */
+/* professional inspection after 5 years of use; replace at 10       */
+/* years from the date of manufacture, even with tread left.          */
+/* Source: Tire & helmet standards research, Nov 21, 2026            */
+/* (~/workspace/research_notes/tire-helmet-standards-20261121/        */
+/* report.md §1): Michelin USA "When Should I Change my Motorcycle   */
+/* Tires?" and Dunlop Care & Maintenance §24 Tire Age; Harley-        */
+/* Davidson "When to Replace Motorcycle Tires" repeats the 5/10       */
+/* guidance. The 6-year number comes from car-tire makers (Goodyear  */
+/* /Cooper, counted from in-service date) and car owner's manuals —   */
+/* it does not apply to motorcycle tires.                              */
+/*                                                                     */
+/* Bands: green under 5 years, amber 5–10 years ("get a professional  */
+/* inspection every year"), red at 10+ years ("replace"). The clock   */
+/* names the rule it applies, in its source line.                      */
+/*                                                                     */
+/* Storage: one manufacture date per bike, `tire_made` (YYYY-MM-DD)   */
+/* on the bike object — the logbook tracks tires per bike, not per     */
+/* position, so there is no front/rear split. Old logbooks have no    */
+/* key at all: that means "no date entered", same as an unset clock.   */
+/* Deleting the bike deletes its tire date with it.                    */
+/*                                                                     */
+/* Input: a plain manufacture date (the app's established date-input   */
+/* style) or a DOT date code — the same decode the Evo Diagnostic's    */
+/* tire reader uses (last 3 or 4 digits of the TIN, WWYY, 49 CFR      */
+/* 574.5). A 3-digit code is pre-2000 (WWY, read as the 1990s, as in  */
+/* the reader); any 3-digit-code tire is 26+ years old and red on     */
+/* sight either way. The decoded date is the first day of that         */
+/* manufacture week.                                                   */
+/* ------------------------------------------------------------------ */
+var TIRE_INSPECT_YEARS = 5;
+var TIRE_REPLACE_YEARS = 10;
+var TIRE_AGE_SOURCE = 'Michelin/Dunlop motorcycle rule, repeated by Harley-Davidson: professional inspection every year after 5 years of use; replace at 10 years from manufacture, even with tread left. (Tire & helmet standards research, Nov 21, 2026.)';
+
+function isDateISO(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  var p = parseISO(s);
+  if (p.m < 1 || p.m > 12 || p.d < 1 || p.d > daysInMonth(p.y, p.m)) return false;
+  return true;
+}
+
+/* Decode a DOT date code (last 3 or 4 digits of the TIN) to the
+ * manufacture date — the first day of that week. Same rules as the
+ * Evo Diagnostic's tire reader (tire.js): 4 digits WWYY, post-2000;
+ * 3 digits WWY, read as the 1990s. Returns { week, year, madeISO }
+ * or { error }. */
+function decodeDotDate(code) {
+  var c = String(code == null ? '' : code).replace(/[^0-9]/g, '');
+  if (c.length !== 4 && c.length !== 3) {
+    return { error: 'A tire date code is 3 or 4 digits — the last digits of the DOT code on the sidewall.' };
+  }
+  var week, year;
+  if (c.length === 4) {
+    week = parseInt(c.slice(0, 2), 10);
+    year = 2000 + parseInt(c.slice(2), 10);
+  } else {
+    week = parseInt(c.slice(0, 2), 10);
+    year = 1990 + parseInt(c.slice(2), 10);
+  }
+  if (week < 1 || week > 53)
+    return { error: 'Week ' + week + ' is not a real week — re-read the code (first two digits are the week).' };
+  if (year > new Date().getFullYear())
+    return { error: 'That code reads as ' + year + ', which is in the future — re-read the code.' };
+  var d = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
+  return {
+    week: week, year: year,
+    madeISO: fmtISO(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())
+  };
+}
+
+/* Set (or clear) a bike's tire manufacture date. `value` is a
+ * YYYY-MM-DD date, a 3–4 digit DOT date code (decoded the same way
+ * the Evo Diagnostic's tire reader does it), or '' to clear.
+ * Returns the bike. A future date is refused — a tire cannot be
+ * made tomorrow. */
+function setTireDate(store, bikeId, value) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Bike not found.');
+  var v = value == null ? '' : String(value).trim();
+  if (!v) { b.tire_made = null; return b; }
+  var madeISO;
+  if (/^\d{3,4}$/.test(v)) {
+    var decoded = decodeDotDate(v);
+    if (decoded.error) throw new Error(decoded.error);
+    madeISO = decoded.madeISO;
+  } else if (isDateISO(v)) {
+    madeISO = v;
+  } else {
+    throw new Error('Enter a manufacture date (YYYY-MM-DD) or a 3–4 digit DOT date code.');
+  }
+  if (daysBetween(madeISO, todayISO()) < 0)
+    throw new Error('That manufacture date is in the future — re-check it.');
+  b.tire_made = madeISO;
+  return b;
+}
+
+/* The tire-age clock for one bike: same shape as a wearClocks entry
+ * (component / about / tracked / taskId / taskName / status /
+ * interval / source / details), so the Due tab renders it like any
+ * other clock. Read-only: it never adds or changes anything. */
+function tireAgeClock(store, bikeId, asOf) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Bike not found.');
+  asOf = asOf || todayISO();
+  var about = 'Age from the DOT manufacture date, not tread depth — a tire can look fine and still be past its life.';
+  var base = {
+    component: 'Tire age', about: about,
+    taskId: null, taskName: null,
+    interval: 'replace ' + TIRE_REPLACE_YEARS + ' years from manufacture',
+    source: TIRE_AGE_SOURCE
+  };
+  var made = b.tire_made || null;
+  if (!made) {
+    base.tracked = false;
+    base.status = 'not-tracked';
+    base.details = ['No date entered — add the tire manufacture date (or DOT code) on the Bikes & Tasks tab to start this clock.'];
+    return base;
+  }
+  /* The stored date is the first day of the manufacture week, so
+   * the week/year line reads back from it. */
+  var p = parseISO(made);
+  var jan1 = Date.UTC(p.y, 0, 1);
+  var madeMs = Date.UTC(p.y, p.m - 1, p.d);
+  var week = Math.floor((madeMs - jan1) / (7 * 86400000)) + 1;
+  var ageYears = Math.floor((daysBetween(made, asOf) / 365.25) * 10) / 10;
+  var inspectBy = addMonths(made, TIRE_INSPECT_YEARS * 12);
+  var replaceBy = addMonths(made, TIRE_REPLACE_YEARS * 12);
+  var status, advice;
+  if (asOf < inspectBy) {
+    status = 'ok';
+    advice = 'Under 5 years — good. Have it inspected by a pro once it passes 5 years of use.';
+  } else if (asOf < replaceBy) {
+    status = 'due-soon';
+    advice = '5 to 10 years — get a professional inspection every year; plan the replacement.';
+  } else {
+    status = 'overdue';
+    advice = '10+ years from manufacture — replace the tire, even if the tread looks fine.';
+  }
+  base.tracked = true;
+  base.status = status;
+  base.details = [
+    'Made week ' + week + ' of ' + p.y + ' (' + fmtDate(made) + ') — ' + ageYears + ' years old.',
+    advice,
+    'Replace by ' + fmtDate(replaceBy) + ' — 10 years from manufacture.'
+  ];
+  return base;
+}
+
 var WEAR_COMPONENTS = [
   { component: 'Engine oil', tasks: ['Engine oil'],
     about: 'Oil + filter — the wear item the whole schedule hangs on.' },
@@ -624,12 +854,16 @@ var WEAR_COMPONENTS = [
     about: 'Replace on the book interval — 20,000 mi Softail, 10,000 mi Sportster.' },
   { component: 'Drive belt', tasks: ['Drive belt'],
     about: 'Inspect on the book interval; adjust at the first service.' },
+  { component: 'Drive chain', tasks: ['Drive chain lubrication'],
+    about: 'Lubricate every 300 mi — chain-drive Sportsters (1986–1990) only, Clymer. Belt-drive bikes have no drive chain.' },
   { component: 'Brake fluid', tasks: ['Brake fluid'],
     about: 'Inspect level/condition — DOT 5 silicone only, never mix with DOT 3/4.' },
   { component: 'Brake pads', tasks: ['Brake pads'],
     about: 'Inspect interval only — replace when worn to minimum thickness, not on mileage.' },
   { component: 'Tires', tasks: ['Tires'],
     about: 'Inspect interval only — pressure and wear every check; replace on condition, not mileage.' },
+  { component: 'Tire age', dateBased: true,
+    about: 'Age from the DOT manufacture date, not tread depth — a tire can look fine and still be past its life.' },
   { component: 'Fork oil', tasks: ['Fork oil'],
     about: 'Replace on the book interval.' },
   { component: 'Wheel bearings', tasks: ['Wheel bearings'],
@@ -658,6 +892,9 @@ function wearClocks(store, bikeId, asOf) {
   asOf = asOf || todayISO();
   var sched = factoryScheduleFor(b.make, b.model, b.year);
   return WEAR_COMPONENTS.map(function (entry) {
+    /* Date-based clock: no task drives it — the DOT manufacture
+     * date on the bike does. */
+    if (entry.dateBased) return tireAgeClock(store, bikeId, asOf);
     var taskId = null;
     Object.keys(store.tasks).some(function (tid) {
       var t = store.tasks[tid];
@@ -681,6 +918,7 @@ function wearClocks(store, bikeId, asOf) {
     var schedTask = null;
     if (sched) {
       sched.tasks.some(function (st) {
+        if (!scheduleTaskApplies(st, b.year)) return false;
         return entry.tasks.some(function (name) {
           return st.name.toLowerCase() === name.toLowerCase();
         }) ? (schedTask = st, true) : false;
@@ -714,8 +952,10 @@ function bikeHistoryExport(store, bikeId) {
   if (!b) throw new Error('Pick a bike first.');
   var entries = historyEntries(store, bikeId, null);
   var expenses = expensesForBike(store, bikeId, null);
+  var rides = ridesForBike(store, bikeId);
   var servicesTotal = historyTotal(entries);
   var expensesTotal = expenseTotal(expenses);
+  var ridesTotal = rideTotalMiles(rides);
   return {
     bike: {
       name: b.name,
@@ -765,6 +1005,22 @@ function bikeHistoryExport(store, bikeId) {
         /* The photo itself stays in the full logbook backup, not in
          * this per-bike report — the flag says one is attached. */
         has_photo: !!x.photo
+      };
+    }),
+    /* Rides ride along in the same per-bike history file, the same
+     * way expenses do: their own section, newest first. Rides are
+     * the only miles source in the logbook, so the grand total of
+     * miles is the rides total — it mirrors grand_total's role as
+     * the headline figure, it just has nothing to add to. */
+    ride_count: rides.length,
+    rides_total_miles: ridesTotal,
+    grand_total_miles: ridesTotal,
+    rides: rides.map(function (r) {
+      return {
+        date: r.date,
+        route: r.route,
+        miles: r.miles,
+        notes: r.notes || ''
       };
     })
   };
@@ -818,6 +1074,19 @@ function bikeHistoryText(store, bikeId) {
       if (x.notes) lines.push('    ' + x.notes);
     });
     lines.push('Grand total (services + expenses): ' + fmtMoney(data.grand_total));
+  }
+  lines.push('');
+  if (!data.rides.length) {
+    lines.push('No rides logged yet for this bike.');
+  } else {
+    lines.push(data.ride_count + ' ride' + (data.ride_count === 1 ? '' : 's') +
+      ' — total ' + fmtRideMiles(data.rides_total_miles) + ':');
+    data.rides.forEach(function (r) {
+      lines.push(fmtDate(r.date) + ' — ' + r.route +
+        ' — ' + fmtRideMiles(r.miles));
+      if (r.notes) lines.push('    ' + r.notes);
+    });
+    lines.push('Grand total miles: ' + fmtRideMiles(data.grand_total_miles));
   }
   return lines.join('\n') + '\n';
 }
@@ -1095,6 +1364,144 @@ function expenseExportFilename(bikeName, ext) {
   return 'bike-log-' + slug + '-expenses.' + ext;
 }
 
+/* ------------------------------------------------------------------ */
+/* Rides — a ride journal, per bike. User-entered only: the app never */
+/* invents a route or a distance. A ride is a date, a route in your   */
+/* own words, the miles you rode, and optional notes. It is NOT a    */
+/* service entry and it never moves the odometer — the logbook has    */
+/* no way to know whether the miles were on this bike's clock, and   */
+/* guessing would corrupt the service intervals. The pattern is the  */
+/* Expenses one: same id rule, same newest-first list, same          */
+/* per-bike totals, same per-entry delete, same ride-along in the    */
+/* per-bike history export, same old-logbook migration.              */
+/* ------------------------------------------------------------------ */
+
+/* Next id from the highest numeric suffix in use — same rule as
+ * entries and expenses, so ids stay stable and predictable. */
+function nextRideId(rides) {
+  var max = 0;
+  rides.forEach(function (r) {
+    var m = /^r(\d+)$/.exec(r.id || '');
+    if (m && parseInt(m[1], 10) > max) max = parseInt(m[1], 10);
+  });
+  return 'r' + (max + 1);
+}
+
+function addRide(store, fields) {
+  var b = store.bikes[fields.bike_id];
+  if (!b) throw new Error('Pick a bike first.');
+  var route = fields.route == null ? '' : String(fields.route).trim();
+  if (!route) throw new Error('Say where you rode.');
+  var date = fields.date || todayISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD.');
+  if (fields.miles === '' || fields.miles == null)
+    throw new Error('Miles is required — enter what you actually rode.');
+  var miles = Number(fields.miles);
+  if (isNaN(miles) || miles < 0) throw new Error('Miles cannot be negative.');
+  var ride = {
+    id: nextRideId(store.rides || []),
+    bike_id: fields.bike_id,
+    date: date,
+    route: route,
+    miles: Math.round(miles * 10) / 10,
+    notes: fields.notes || ''
+  };
+  store.rides.push(ride);
+  return ride;
+}
+
+function removeRide(store, rideId) {
+  var found = (store.rides || []).some(function (r) { return r.id === rideId; });
+  if (!found) throw new Error('Ride not found.');
+  store.rides = store.rides.filter(function (r) { return r.id !== rideId; });
+}
+
+/* Rides for one bike (or all bikes when bikeId is null), newest
+ * first — same ordering rule as expenses. */
+function ridesForBike(store, bikeId) {
+  var list = (store.rides || []).slice();
+  if (bikeId) list = list.filter(function (r) { return r.bike_id === bikeId; });
+  list.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    var na = parseInt((/^r(\d+)$/.exec(a.id || '') || [0, 0])[1], 10);
+    var nb = parseInt((/^r(\d+)$/.exec(b.id || '') || [0, 0])[1], 10);
+    return nb - na;
+  });
+  return list;
+}
+
+/* Total miles over a list of rides, kept to one decimal so a
+ * 12.5-mile loop plus a 45.6-mile run does not come out 58.10000000000001. */
+function rideTotalMiles(list) {
+  var total = 0;
+  list.forEach(function (r) { if (r.miles != null) total += r.miles; });
+  return Math.round(total * 10) / 10;
+}
+
+/* Per-bike rides export (JSON shape) — the rides-only file the
+ * Rides tab downloads. Same one-bike-at-a-time rule as the
+ * service history and expenses exports. */
+function bikeRidesExport(store, bikeId) {
+  var b = store.bikes[bikeId];
+  if (!b) throw new Error('Pick a bike first.');
+  var rides = ridesForBike(store, bikeId);
+  return {
+    bike: {
+      name: b.name,
+      year: b.year == null ? null : b.year,
+      make: b.make || '',
+      model: b.model || '',
+      odometer: b.odometer,
+      odometer_date: b.odometer_date || null
+    },
+    exported: todayISO(),
+    ride_count: rides.length,
+    total_miles: rideTotalMiles(rides),
+    rides: rides.map(function (r) {
+      return {
+        date: r.date,
+        route: r.route,
+        miles: r.miles,
+        notes: r.notes || ''
+      };
+    })
+  };
+}
+
+/* The same per-bike rides as readable plain text. */
+function bikeRidesText(store, bikeId) {
+  var data = bikeRidesExport(store, bikeId);
+  var b = data.bike;
+  var spec = [b.year || '', b.make || '', b.model || ''].join(' ')
+    .replace(/\s+/g, ' ').trim();
+  var lines = [];
+  lines.push('Rides — ' + b.name + (spec ? ' (' + spec + ')' : ''));
+  lines.push('Odometer: ' + fmtMiles(b.odometer) +
+    (b.odometer_date ? ' (as of ' + fmtDate(b.odometer_date) + ')' : ''));
+  lines.push('Exported: ' + fmtDate(data.exported));
+  lines.push('');
+  if (!data.rides.length) {
+    lines.push('No rides logged yet for this bike.');
+  } else {
+    lines.push(data.ride_count + ' ride' + (data.ride_count === 1 ? '' : 's') +
+      ' — total ' + fmtRideMiles(data.total_miles) + ':');
+    data.rides.forEach(function (r) {
+      lines.push(fmtDate(r.date) + ' — ' + r.route +
+        ' — ' + fmtRideMiles(r.miles));
+      if (r.notes) lines.push('    ' + r.notes);
+    });
+  }
+  return lines.join('\n') + '\n';
+}
+
+/* Download filename for a per-bike rides export, slugged from the
+ * bike name: "Example 1995 Softail" -> bike-log-example-1995-softail-rides.json */
+function rideExportFilename(bikeName, ext) {
+  var slug = String(bikeName || 'bike').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bike';
+  return 'bike-log-' + slug + '-rides.' + ext;
+}
+
 /* Validate an imported logbook (CLI data.json shape). Throws on garbage
  * or on entries pointing at bikes/tasks that are not in the file. */
 function validateImport(data) {
@@ -1109,6 +1516,11 @@ function validateImport(data) {
   Object.keys(data.bikes).forEach(function (id) {
     if (!data.bikes[id] || !data.bikes[id].name)
       throw new Error('Bike "' + id + '" has no name.');
+    /* A tire manufacture date, when present, must be a real
+     * calendar date; a missing key is an old logbook, not an error. */
+    var made = data.bikes[id].tire_made;
+    if (made != null && !isDateISO(made))
+      throw new Error('Bike "' + id + '" has a bad tire manufacture date.');
   });
   Object.keys(data.tasks).forEach(function (id) {
     var t = data.tasks[id];
@@ -1140,7 +1552,19 @@ function validateImport(data) {
     if (x.photo != null && !isExpensePhoto(x.photo))
       throw new Error('Expense #' + (i + 1) + ' has a bad receipt photo.');
   });
-  return { bikes: data.bikes, tasks: data.tasks, entries: data.entries, expenses: expenses };
+  /* Rides are this app's own key too — the CLI's data.json never has
+   * one, so a missing key is an old logbook, not an error. When
+   * present it must be a list of rides on bikes in the file. */
+  var rides = Array.isArray(data.rides) ? data.rides : [];
+  rides.forEach(function (r, i) {
+    if (!r || typeof r !== 'object')
+      throw new Error('Ride #' + (i + 1) + ' is not an object.');
+    if (!data.bikes[r.bike_id])
+      throw new Error('Ride #' + (i + 1) + ' points at a missing bike.');
+    if (r.miles != null && (isNaN(Number(r.miles)) || Number(r.miles) < 0))
+      throw new Error('Ride #' + (i + 1) + ' has bad miles.');
+  });
+  return { bikes: data.bikes, tasks: data.tasks, entries: data.entries, expenses: expenses, rides: rides };
 }
 
 /* Example logbook — dates relative to today so the OVERDUE / DUE SOON /
@@ -1216,6 +1640,13 @@ function mergeSample(store, sample) {
     copy.id = nextExpenseId(store.expenses || []);
     copy.bike_id = bikeMap[x.bike_id] || x.bike_id;
     store.expenses.push(copy);
+  });
+  (sample.rides || []).forEach(function (r) {
+    var copy = {};
+    Object.keys(r).forEach(function (k) { copy[k] = r[k]; });
+    copy.id = nextRideId(store.rides || []);
+    copy.bike_id = bikeMap[r.bike_id] || r.bike_id;
+    store.rides.push(copy);
   });
   return { bikes: Object.keys(bikeMap).length, tasks: Object.keys(taskMap).length };
 }
@@ -1518,7 +1949,8 @@ if (typeof document !== 'undefined') {
     }).join('');
     [['due-bike', true], ['log-bike', false], ['odo-bike', false],
      ['task-bike', false], ['history-bike', true],
-     ['expense-bike', true], ['expense-form-bike', false]].forEach(function (pair) {
+     ['expense-bike', true], ['expense-form-bike', false],
+     ['ride-bike', true], ['ride-form-bike', false]].forEach(function (pair) {
       var el = document.getElementById(pair[0]);
       if (!el) return;
       var keep = el.value;
@@ -1671,7 +2103,7 @@ if (typeof document !== 'undefined') {
       clocks.forEach(function (c) {
         html += '<div class="taskrow">' + statusBadge(c.status) + ' <b>' + esc(c.component) + '</b>' +
           (c.interval ? ' <span class="muted">(' + esc(c.interval) + ')</span>' : '');
-        if (c.tracked) {
+        if (c.taskId) {
           html += ' <button class="mini secondary" data-log-bike="' + esc(bid) +
             '" data-log-task="' + esc(c.taskId) + '">Log</button>';
         }
@@ -1682,9 +2114,11 @@ if (typeof document !== 'undefined') {
         if (c.source) html += '<div class="detail">' + esc(c.source) + '</div>';
         html += '</div>';
       });
-      html += '<p class="muted">No clock for parts with no published interval: drive chain ' +
+      html += '<p class="muted">The tire-age clock runs off the DOT manufacture date you enter on the ' +
+        'Bikes &amp; Tasks tab — set it once per bike and the clock counts from there. ' +
+        'No clock for parts with no published interval: drive chain ' +
         '(the factory tables are belt-drive — add a task from your manual if yours has a chain), ' +
-        'tire replacement (on condition/wear, not mileage), coolant (air-cooled — no cooling system).</p></div>';
+        'coolant (air-cooled — no cooling system).</p></div>';
     });
     box.innerHTML = html;
     wireLogButtons(box);
@@ -1706,6 +2140,20 @@ if (typeof document !== 'undefined') {
         ' <button class="mini danger" data-del-bike="' + esc(bid) + '">Delete</button>' +
         '<div class="detail">odo ' + fmtMiles(b.odometer) + ' (as of ' + fmtDate(b.odometer_date) + ')</div>';
       if (b.notes) html += '<div class="detail">' + esc(b.notes) + '</div>';
+      /* Tire manufacture date for the tire-age clock: one date per
+       * bike. A date input, or a 3–4 digit DOT code (decoded the
+       * same way the Evo Diagnostic's tire reader does it) — a DOT
+       * code wins over the date field when both are filled, so
+       * typing a code over a stored date replaces it. */
+      var tireClock = tireAgeClock(store, bid, todayISO());
+      html += '<div class="detail"><b>Tire age:</b> ' +
+        (b.tire_made ? esc(tireClock.details[0]) + ' ' + statusBadge(tireClock.status)
+          : 'no date entered') + '</div>' +
+        '<div class="detail"><label>Tire manufacture date ' +
+        '<input type="date" data-tire-date="' + esc(bid) + '" value="' + esc(b.tire_made || '') + '"></label> ' +
+        '<label>or DOT code <input type="text" data-tire-dot="' + esc(bid) + '" inputmode="numeric" placeholder="e.g. 5107" maxlength="4" size="6"></label> ' +
+        '<button class="mini secondary" data-save-tire="' + esc(bid) + '">Save tire date</button>' +
+        (b.tire_made ? ' <button class="mini secondary" data-clear-tire="' + esc(bid) + '">Clear</button>' : '') + '</div>';
       html += '</div>';
       var tids = tasksForBike(store, bid);
       if (!tids.length) {
@@ -1734,14 +2182,30 @@ if (typeof document !== 'undefined') {
         toast('Bike deleted.');
       });
     });
-    box.querySelectorAll('[data-del-task]').forEach(function (btn) {
+    box.querySelectorAll('[data-save-tire]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var tid = btn.getAttribute('data-del-task');
-        if (!window.confirm('Delete task "' + store.tasks[tid].name + '" and its history?')) return;
-        removeTask(store, tid);
+        var bid = btn.getAttribute('data-save-tire');
+        var dateEl = box.querySelector('[data-tire-date="' + bid + '"]');
+        var dotEl = box.querySelector('[data-tire-dot="' + bid + '"]');
+        /* A DOT code wins when both are filled, so typing a code
+         * over a stored date replaces it. */
+        var val = (dotEl && dotEl.value.trim()) || (dateEl && dateEl.value) || '';
+        if (!val) { toast('Enter a manufacture date or a DOT code first.', true); return; }
+        try {
+          setTireDate(store, bid, val);
+          saveStore(store);
+          renderAll();
+          toast('Tire date saved.');
+        } catch (e) { toast(e.message, true); }
+      });
+    });
+    box.querySelectorAll('[data-clear-tire]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var bid = btn.getAttribute('data-clear-tire');
+        setTireDate(store, bid, '');
         saveStore(store);
         renderAll();
-        toast('Task deleted.');
+        toast('Tire date cleared.');
       });
     });
   }
@@ -1843,6 +2307,50 @@ if (typeof document !== 'undefined') {
     });
   }
 
+  function renderRides() {
+    var bikeId = document.getElementById('ride-bike').value || null;
+    var list = ridesForBike(store, bikeId);
+    var totalEl = document.getElementById('ride-total');
+    var total = rideTotalMiles(list);
+    if (!Object.keys(store.bikes).length) {
+      totalEl.textContent = 'No bikes yet — add one on the Bikes & Tasks tab.';
+      document.getElementById('ride-list').innerHTML = '';
+      return;
+    }
+    totalEl.innerHTML = list.length + ' ride' + (list.length === 1 ? '' : 's') +
+      (total ? ' — total ' + fmtRideMiles(total) : ' — no miles logged yet');
+    if (!list.length) {
+      document.getElementById('ride-list').innerHTML =
+        '<p class="card">No rides match — log one below.</p>';
+      return;
+    }
+    var html = '<div class="card">';
+    list.forEach(function (r) {
+      var b = store.bikes[r.bike_id];
+      html += '<div class="entry"><header><b>' + fmtDate(r.date) + '</b> — ' +
+        esc(r.route) + ' — ' + fmtRideMiles(r.miles) + '</header>' +
+        '<div class="detail">' + esc(b ? b.name : '?') + '</div>';
+      if (r.notes) html += '<div class="detail">' + esc(r.notes) + '</div>';
+      html += '<button class="mini danger" data-del-ride="' + esc(r.id) + '">Delete</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+    var box = document.getElementById('ride-list');
+    box.innerHTML = html;
+    box.querySelectorAll('[data-del-ride]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var rid = btn.getAttribute('data-del-ride');
+        var r = (store.rides || []).filter(function (e) { return e.id === rid; })[0];
+        if (!r) return;
+        if (!window.confirm('Delete this ride — ' + r.route + ' (' + fmtRideMiles(r.miles) + ')?')) return;
+        removeRide(store, rid);
+        saveStore(store);
+        renderAll();
+        toast('Ride deleted.');
+      });
+    });
+  }
+
   function renderData() {
     var bikes = Object.keys(store.bikes).length;
     var tasks = Object.keys(store.tasks).length;
@@ -1850,13 +2358,17 @@ if (typeof document !== 'undefined') {
     var spent = historyTotal(store.entries);
     var expenses = (store.expenses || []).length;
     var expenseSpent = expenseTotal(store.expenses || []);
+    var rides = (store.rides || []).length;
+    var rideMiles = rideTotalMiles(store.rides || []);
     document.getElementById('data-counts').textContent =
       bikes + ' bike' + (bikes === 1 ? '' : 's') + ', ' +
       tasks + ' task' + (tasks === 1 ? '' : 's') + ', ' +
       entries + ' service' + (entries === 1 ? '' : 's') + ' logged' +
       (spent ? ', ' + fmtMoney(spent) + ' total spent' : '') +
       (expenses ? ', ' + expenses + ' expense' + (expenses === 1 ? '' : 's') +
-        ' logged (' + fmtMoney(expenseSpent) + ')' : '') + '.';
+        ' logged (' + fmtMoney(expenseSpent) + ')' : '') +
+      (rides ? ', ' + rides + ' ride' + (rides === 1 ? '' : 's') +
+        ' logged (' + fmtRideMiles(rideMiles) + ')' : '') + '.';
   }
 
   function renderAll() {
@@ -1867,6 +2379,7 @@ if (typeof document !== 'undefined') {
     renderBikes();
     renderHistory();
     renderExpenses();
+    renderRides();
     renderData();
   }
 
@@ -2383,6 +2896,67 @@ if (typeof document !== 'undefined') {
     } catch (e) { toast(e.message, true); }
   });
 
+  /* Per-bike rides export: the bike picked in the Rides filter
+   * above. "All bikes" is not one bike — pick one first. */
+  function rideExportBike() {
+    var bikeId = document.getElementById('ride-bike').value || null;
+    if (!bikeId) { toast('Pick a bike first — rides export is one bike at a time.', true); return null; }
+    return bikeId;
+  }
+
+  document.getElementById('ride-export-json-btn').addEventListener('click', function () {
+    var bikeId = rideExportBike();
+    if (!bikeId) return;
+    var data = bikeRidesExport(store, bikeId);
+    downloadFile(rideExportFilename(data.bike.name, 'json'),
+      JSON.stringify(data, null, 2) + '\n', 'application/json');
+    toast(data.ride_count
+      ? 'Rides downloaded — ' + data.ride_count + ' rides for ' + data.bike.name + '.'
+      : 'Rides downloaded — no rides logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('ride-export-text-btn').addEventListener('click', function () {
+    var bikeId = rideExportBike();
+    if (!bikeId) return;
+    var data = bikeRidesExport(store, bikeId);
+    downloadFile(rideExportFilename(data.bike.name, 'txt'),
+      bikeRidesText(store, bikeId), 'text/plain');
+    toast(data.ride_count
+      ? 'Rides downloaded — ' + data.ride_count + ' rides for ' + data.bike.name + '.'
+      : 'Rides downloaded — no rides logged for ' + data.bike.name + ' yet.');
+  });
+
+  document.getElementById('ride-copy-text-btn').addEventListener('click', function () {
+    var bikeId = rideExportBike();
+    if (!bikeId) return;
+    var done = function () { toast('Rides copied to clipboard.'); };
+    var fail = function () { toast('Copy failed — use Download instead.', true); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(bikeRidesText(store, bikeId)).then(done, fail);
+    } else { fail(); }
+  });
+
+  document.getElementById('ride-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    try {
+      addRide(store, {
+        bike_id: document.getElementById('ride-form-bike').value,
+        date: document.getElementById('ride-date').value,
+        route: document.getElementById('ride-route').value,
+        miles: document.getElementById('ride-miles').value,
+        notes: document.getElementById('ride-notes').value
+      });
+      saveStore(store);
+      renderAll();
+      document.getElementById('ride-route').value = '';
+      document.getElementById('ride-miles').value = '';
+      document.getElementById('ride-notes').value = '';
+      toast('Ride logged.');
+    } catch (e) { toast(e.message, true); }
+  });
+
+  document.getElementById('ride-bike').addEventListener('change', renderRides);
+
   /* Receipt-photo wiring, delegated so it survives the expense list
    * being rebuilt: attach on an existing entry, remove from an
    * entry, pick on the new-expense form, clear a pending pick. */
@@ -2487,6 +3061,7 @@ if (typeof document !== 'undefined') {
   document.getElementById('log-date').value = todayISO();
   document.getElementById('odo-date').value = todayISO();
   document.getElementById('expense-date').value = todayISO();
+  document.getElementById('ride-date').value = todayISO();
   renderAll();
 
   /* Handoff intake: delegated confirm/dismiss (the card is rebuilt
@@ -2529,6 +3104,11 @@ if (typeof module !== 'undefined' && module.exports) {
     expensesByCategory: expensesByCategory,
     bikeExpensesExport: bikeExpensesExport, bikeExpensesText: bikeExpensesText,
     expenseExportFilename: expenseExportFilename,
+    nextRideId: nextRideId,
+    addRide: addRide, removeRide: removeRide,
+    ridesForBike: ridesForBike, rideTotalMiles: rideTotalMiles,
+    bikeRidesExport: bikeRidesExport, bikeRidesText: bikeRidesText,
+    rideExportFilename: rideExportFilename,
     validateImport: validateImport, sampleStore: sampleStore,
     mergeSample: mergeSample,
     addMonths: addMonths, daysBetween: daysBetween,
@@ -2540,6 +3120,12 @@ if (typeof module !== 'undefined' && module.exports) {
     applyFactorySchedule: applyFactorySchedule,
     WEAR_COMPONENTS: WEAR_COMPONENTS,
     wearClocks: wearClocks,
+    TIRE_INSPECT_YEARS: TIRE_INSPECT_YEARS,
+    TIRE_REPLACE_YEARS: TIRE_REPLACE_YEARS,
+    isDateISO: isDateISO,
+    decodeDotDate: decodeDotDate,
+    setTireDate: setTireDate,
+    tireAgeClock: tireAgeClock,
     MAX_PHOTO_CHARS: MAX_PHOTO_CHARS,
     isExpensePhoto: isExpensePhoto,
     attachExpensePhoto: attachExpensePhoto,

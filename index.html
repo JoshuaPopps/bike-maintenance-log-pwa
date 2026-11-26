@@ -167,6 +167,37 @@
     </div>
   </section>
 
+  <!-- RIDES -->
+  <section id="view-rides" class="view">
+    <h2>Rides</h2>
+    <p class="muted">Your ride journal, per bike — where you went and how far. No routes are suggested here; every mile is one you typed in. A ride never moves the odometer — the logbook has no way to know whether those miles were on this bike's clock, so it doesn't guess. Rides ride along in the per-bike history export too.</p>
+    <div class="grid">
+      <label>Bike<select id="ride-bike"></select></label>
+    </div>
+    <p id="ride-total" class="card"></p>
+    <div id="ride-list"></div>
+
+    <h3>Log a ride</h3>
+    <form id="ride-form" class="card">
+      <div class="grid">
+        <label>Bike<select id="ride-form-bike" required></select></label>
+        <label>Date<input type="date" id="ride-date" required></label>
+        <label>Route<input type="text" id="ride-route" required placeholder="e.g. Tortilla Flat loop"></label>
+        <label>Miles<input type="number" id="ride-miles" inputmode="decimal" min="0" step="0.1" required></label>
+      </div>
+      <label>Notes<textarea id="ride-notes" rows="2" placeholder="e.g. solo, back roads, stopped for gas in Apache Junction"></textarea></label>
+      <button type="submit" class="primary">Log ride</button>
+    </form>
+
+    <div class="card">
+      <h3>Export this bike's rides</h3>
+      <p class="muted">Downloads the rides for the bike picked above — as JSON, or as readable plain text. Pick one bike first; "All bikes" exports nothing.</p>
+      <button id="ride-export-json-btn" class="primary">Download JSON (this bike)</button>
+      <button id="ride-export-text-btn" class="secondary">Download text (this bike)</button>
+      <button id="ride-copy-text-btn" class="secondary">Copy text</button>
+    </div>
+  </section>
+
   <!-- DATA -->
   <section id="view-data" class="view">
     <h2>Your data</h2>
@@ -225,6 +256,10 @@
       <p>Solo: 36 psi front / 36 psi rear. With passenger: 36 psi front / 40 psi rear.</p>
     </div>
     <div class="card">
+      <h3>Tire age — the 5/10 rule</h3>
+      <p>Michelin/Dunlop motorcycle rule, repeated by Harley-Davidson: have a tire professionally inspected every year after 5 years of use, and replace it at 10 years from the date of manufacture — even if the tread looks fine. Read the date off the DOT code on the sidewall (last 4 digits = week + year, e.g. 5107 = week 51 of 2007). This is <b>not</b> the 6-year figure — that one comes from car-tire makers and car owner's manuals. The tire-age clock on the Due tab applies this rule; enter the manufacture date on the Bikes &amp; Tasks tab to start it.</p>
+    </div>
+    <div class="card">
       <h3>Key torques</h3>
       <ul>
         <li><b>Rear axle</b> — 60–65 ft-lbs</li>
@@ -280,6 +315,7 @@
   <button class="navbtn" data-view="bikes">Bikes &amp; Tasks</button>
   <button class="navbtn" data-view="history">History</button>
   <button class="navbtn" data-view="expenses">Expenses</button>
+  <button class="navbtn" data-view="rides">Rides</button>
   <button class="navbtn" data-view="data">Data</button>
   <button class="navbtn" data-view="reference">Reference</button>
 </nav>

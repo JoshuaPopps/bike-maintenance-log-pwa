@@ -201,6 +201,16 @@ button {
   color: var(--ink);
 }
 button:active { transform: translate(1px, 1px); }
+/* Service-worker update button (sw-update.js): hidden until a new
+ * version is waiting — tap it and the new worker takes over. */
+.pg-sw-update {
+  display: block; width: 100%; margin: 10px 0; padding: 12px 16px;
+  border: 1px solid #9d6bff; border-radius: 8px;
+  background: #9d6bff; color: #070709;
+  font-weight: 700; text-align: center; cursor: pointer;
+}
+.pg-sw-update:hover { transform: none !important; border-color: #9d6bff; color: #070709; }
+.pg-sw-update:active { transform: none; }
 button.primary {
   background: linear-gradient(180deg, #fdfdff 0%, #d7d7de 38%, #9a9aa4 52%, #e6e6ec 68%, #b9b9c2 100%);
   color: #0b0b0d;
@@ -240,6 +250,18 @@ button.quick { padding: 8px 12px; font-size: 0.9rem; min-height: 0; background: 
 .badge.soon::before { background: #9d6bff; box-shadow: 0 0 8px rgba(157, 107, 255, .7); }
 .badge.ok { color: var(--ink-soft); }
 .badge.ok::before { background: #3fae5a; }
+/* Wear clocks that are not running yet: no due state, hollow dot. */
+.badge.idle { color: var(--muted); }
+.badge.idle::before { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+/* Receipt-photo thumbnails on expenses: small, chrome-framed. */
+.receipt-thumb { margin: 8px 0; }
+.receipt-thumb img {
+  max-width: 140px;
+  max-height: 140px;
+  display: block;
+  border: 1px solid var(--line-strong);
+  background: #000;
+}
 .entry { border-top: 1px dotted var(--line-strong); padding: 12px 0; }
 .entry header { margin-bottom: 6px; }
 .entry header b {
@@ -252,6 +274,13 @@ button.quick { padding: 8px 12px; font-size: 0.9rem; min-height: 0; background: 
 .detail { color: var(--muted); font-size: 0.95rem; margin: 2px 0 2px 0; }
 .taskrow { padding: 10px 0; border-top: 1px dotted var(--line-strong); }
 .taskrow:first-child { border-top: none; }
+/* Reminders card on the Due tab: purple edge normally, signal-red
+ * edge while anything is overdue. */
+.reminders { border-left: 3px solid var(--accent); }
+.reminders.attention { border-left-color: var(--signal); }
+.reminders h3 { margin: 0 0 8px; }
+.reminders p { margin: 8px 0; }
+.reminders .badge { margin-right: 6px; }
 .bikerow { padding: 10px 0; border-top: 1px dotted var(--line-strong); }
 .bikerow:first-child { border-top: none; }
 .bottomnav {
